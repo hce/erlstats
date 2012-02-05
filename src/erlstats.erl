@@ -9,8 +9,10 @@
 
 -behaviour(gen_server).
 
+-include("erlstats.hrl").
+
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -24,6 +26,8 @@
 	  me
 	 }).
 
+-define(SERVER, ?MODULE).
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -31,8 +35,8 @@
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Args) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
 %%====================================================================
 %% gen_server callbacks
@@ -101,8 +105,28 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info({tcp, S, Data}, State) ->
-    error_logger:info_msg("Data: ~p", [Data]);
+handle_info({tcp, _Socket, Data}, State) ->
+    Len = size(Data) - 2,  % Substract the length of \r\n
+    << Data_wr:Len/binary, _CRLF/binary >> = Data,
+
+    io:format("Parsing ~p~n", [Data_wr]),
+    Newstate = case parseline(Data_wr) of
+		   [Instigator, Command|Params] ->
+		       Command_lower = string:to_lower(binary_to_list(Command)),
+		       Command_atom  = try list_to_existing_atom(Command_lower) of
+					   Someatom when is_atom(Someatom) ->
+					       Someatom
+				       catch _:_ ->
+					       unknown
+				       end,
+						%io:format("Command ~p[~p] Inst ~p Params ~p~n", [Command_atom, Command_lower, Instigator, Params]),
+		       irccmd(Command_atom, State, Instigator, Params);
+		   Else ->
+		       error_logger:error_msg("Unable to handle received line ~p", [Else]),
+		       State
+    end,
+    
+    {noreply, Newstate};
 
 
 handle_info(_Info, State) ->
@@ -128,3 +152,77 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+parseline(<< Firstbyte:8, Rest/binary >>=Line)  ->
+    if
+	Firstbyte == $: ->
+	    parseline(rest, Rest);
+	true ->
+	    [[]|parseline(rest, Line)]
+    end.
+
+parseline(rest, Line) ->
+    [NormalParams|Textparam] = binary:split(Line, << " :" >>),
+    NormalParamList = binary:split(NormalParams, << " " >>, [global]),
+    NormalParamList ++ Textparam.
+
+irccmd(notice, State, Instigator, [<<"AUTH">>, Authprocess]) ->
+    error_logger:info_msg("Authentication Handshake with ~p: ~p", [Instigator, Authprocess]),
+    State;
+
+irccmd(notice, State, Instigator, Params) ->
+    io:format("Got ~p from ~p", [Params, Instigator]),
+    State;
+
+irccmd(ping, State, [], [Pongparam]) ->
+    error_logger:info_msg("Sending PONG ~p", [Pongparam]),
+    ts6:sts_pong(State#state.socket, Pongparam),
+    State;
+
+irccmd(uid, State, SID, [Nick, Hops, TS,
+			 Usermode, Ident, Hostname,
+			 Ipaddr, UID, Gecos]) ->
+    User = #ircuser{
+      uid=UID,
+      sid=SID,
+      nick=Nick,
+      hop=Hops,
+      ts=TS,
+      modes=esmisc:parseumode(Usermode),
+      ident=Ident,
+      host=Hostname,
+      ip=Ipaddr,
+      realname=Gecos,
+      channels=[],
+      authenticated=false,
+      away=undefined
+     },
+
+    ets:insert(State#state.usertable, User),
+
+    error_logger:info_msg("New user: ~p", [User]),
+    
+    State;
+
+irccmd(kill, State, Killer, [Killee, Reason]) ->
+    error_logger:info_msg("Received KILL for ~p from ~p (Reason ~p)",
+			  [(resolveuser(State, Killee))#ircuser.nick,
+			   (resolveuser(State, Killer))#ircuser.nick,
+			   Reason]),
+    ets:delete(State#state.usertable, Killee),
+    State;
+
+irccmd(quit, State, Quitter, [Reason]) ->
+    error_logger:info_msg("User ~p quit (Reason: ~p)",
+			  [(resolveuser(State, Quitter))#ircuser.nick,
+			   Reason]),
+    ets:delete(State#state.usertable, Quitter),
+    State;
+
+irccmd(Command, State, Instigator, Params) ->
+    error_logger:info_msg("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
+    State.
+
+
+resolveuser(#state{usertable=UT}, UID) ->
+    [User] = ets:lookup(UT, UID),
+    User.

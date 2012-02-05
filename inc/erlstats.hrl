@@ -1,3 +1,4 @@
+
 %%%-------------------------------------------------------------------
 %%% File    : erlstats.hrl
 %%% Author  : hc <hc@hc-laptop>
@@ -5,8 +6,6 @@
 %%%
 %%% Created :  5 Feb 2012 by hc <hc@hc-laptop>
 %%%-------------------------------------------------------------------
--module(erlstats).
-
 
 -record(ircuser, {uid,
 		  sid,

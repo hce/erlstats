@@ -8,7 +8,8 @@
 -module(ts6).
 
 %% API
--export([sts_login/5]).
+-export([sts_login/5,
+	 sts_pong/2]).
 
 %%====================================================================
 %% API
@@ -25,6 +26,12 @@ sts_login(S, SID, Nodename, Password, Node_Description) ->
 		      "SERVER ", Nodename/binary, " 1 :", Node_Description/binary, 10,
 		      "SVINFO 5 5 0 :", Curtime/binary, 10
 		    >>).
+
+sts_pong(S, Pongparam) ->
+    gen_tcp:send(S, <<
+		      "PONG :", Pongparam/binary, 10
+		    >>).    
+    
 
 
 %%====================================================================
