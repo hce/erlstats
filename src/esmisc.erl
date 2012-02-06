@@ -65,7 +65,7 @@ parsecmode(_Operation, Channel, << >>, []) ->
     Channel;
 
 parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
-    case {lists:member(Modechar, "ntpsmi"), Operation, Modechar} of
+    case {lists:member(Modechar, "ntpsmiS"), Operation, Modechar} of
 	{_, _, $+} ->
 	    parsecmode(add, Channel, MRest, Pall);
 	{_, _, $-} ->
