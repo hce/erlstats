@@ -61,9 +61,17 @@ init([]) ->
 			   ]
 	       },
 	      permanent,2000,worker,['greasel']},
+    Fricka = {'Fricka',
+	      {'fricka',
+	       start_link, [
+			   ]
+	      },
+	      permanent,2000,worker,['fricka']},
+    
 
     Plugins = [
-	       Greasel
+	       Greasel,
+	       Fricka
 	      ],
 
     {ok,{{one_for_all,0,1}, [Erlstats|Plugins]}}.

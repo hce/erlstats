@@ -58,6 +58,11 @@
 			 ip,
 			 uid,
 			 gecos}).
+
+-record(irccmdtmode, {issuer,
+		      ts,
+		      channame,
+		      modechanges}).
 		 
 -record(blacklistentry, {ip,
 			 expirytime,

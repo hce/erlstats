@@ -17,7 +17,8 @@
 %% API functions
 -export([
 	 irc_kill/3,
-	 irc_kline/3
+	 irc_kline/3,
+	 irc_cmode/3
 	]).
 
 %% gen_server callbacks
@@ -186,6 +187,21 @@ handle_call({irc_kline, Host, Expiry, Reason}, _From, State) ->
 		  Host, Expiry, Reason),
     {reply, ok, State};
 
+handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
+    [Channel_P] = ets:lookup(State#state.channeltable, Channel),
+    ts6:sts_cmode(State#state.socket,
+		  if Modesetter == server ->
+			  (State#state.me)#ircserver.hostname;
+		     true -> Modesetter end,
+		  Channel,
+		  Channel_P#ircchannel.ts,
+		  Modes),
+
+    Channel_U = esmisc:parsecmode(Channel_P, Modes),
+    ?DEBUG("Updating channel ~p ~p: ~p", [Channel, Modes, Channel_U]),
+    ets:insert(State#state.channeltable, Channel_U),
+    {reply, ok, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -241,6 +257,9 @@ irc_kill(Killer, Killee, Reason) ->
 
 irc_kline(Host, Timeout, Reason) ->
     gen_server:call(erlstats, {irc_kline, Host, Timeout, Reason}).
+
+irc_cmode(Modesetter, Channel, Modes) ->
+    gen_server:call(erlstats, {irc_cmode, Modesetter, Channel, Modes}).
 
 
 %%--------------------------------------------------------------------
@@ -476,6 +495,16 @@ irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     Channel_U = esmisc:parsecmode(Channel, Modestring),
     ets:insert(State#state.channeltable, Channel_U),
     ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
+
+    PluginParams = #irccmdtmode{
+      issuer=Issuer,
+      ts=TS,
+      channame=Channame,
+      modechanges=Modestring
+     },
+
+    plugincommand(State, tmode, PluginParams),
+    
     State;
 
 irccmd(Command, State, Instigator, Params) ->

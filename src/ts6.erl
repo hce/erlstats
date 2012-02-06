@@ -10,11 +10,14 @@
 -include("erlstats.hrl").
 
 %% API
--export([sts_login/5,
+-export([
+	 sts_login/5,
 	 sts_pong/2,
 	 sts_newuser/2,
 	 sts_kill/5,
-	 sts_kline/5]).
+	 sts_kline/5,
+	 sts_cmode/5
+	]).
 
 %%====================================================================
 %% API
@@ -80,6 +83,22 @@ sts_kline(S, Kliner, Host, Expiry, Reason) ->
 		   " :", Reason/binary, 10
 		 >>).
 
+sts_cmode(S, Modesetter, Channel, TS, Modes) ->
+    TS_B = list_to_binary(integer_to_list(TS)),
+    Modes_F = lists:foldl(fun(E, A) ->
+				  if A == [] ->
+					  E;
+				     true ->
+					  << A/binary, " ", E/binary >>
+				  end
+			  end, << >>, Modes),
+    gen_tcp:send(S,
+		 <<
+		   ":", Modesetter/binary, " TMODE ",
+		   TS_B/binary, " ", Channel/binary, " ",
+		   Modes_F/binary, 10
+		 >>).
+		   
 
 %%====================================================================
 %% Internal functions

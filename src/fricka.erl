@@ -9,6 +9,8 @@
 
 -behaviour(gen_server).
 
+-include("erlstats.hrl").
+
 %% API
 -export([start_link/0]).
 
@@ -16,7 +18,9 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--record(state, {}).
+-record(state, {
+	 frickauser    %% Out IRC "nick" fricka
+	 }).
 
 %%====================================================================
 %% API
@@ -40,6 +44,10 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
+    Handledcommands = [
+		      tmode  % We need to see all channel mode changes
+		     ],
+    gen_server:call(erlstats, {register_plugin, Handledcommands}),
     {ok, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -61,7 +69,25 @@ handle_call(_Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-handle_cast(_Msg, State) ->
+handle_cast(initialize, State) ->
+    {ok, User} = gen_server:call(erlstats, {register_user,
+					    << "FRICKA" >>,
+					    << "fricka" >>,
+					    << "~hs" >>,
+					    << "research.hackint.org" >>,
+					    << "Fricka" >>,
+					    << "Frech wacht Fricka ueber's HackINT" >>}),
+    {noreply, State#state{frickauser=User}};
+handle_cast({irccmd, tmode, Params}, State) ->
+    Channame = Params#irccmdtmode.channame,
+    [Modes|Modeparams] = Params#irccmdtmode.modechanges,
+    Nicks_to_unhalfop = find_nicks_to_unhalfop(Channame, Modes, Modeparams),
+    error_logger:info_msg("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]),
+    Modechars = list_to_binary(["h" || _X <- Nicks_to_unhalfop]),
+    erlstats:irc_cmode(server, Channame, [<< "-", Modechars/binary >>|
+					  Nicks_to_unhalfop]),
+    {noreply, State};  
+handle_cast(_Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -93,3 +119,24 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+find_nicks_to_unhalfop(Channel, Modechanges, Params) ->    
+    find_nicks_to_unhalfop(Channel, Modechanges, Params, undecided).
+find_nicks_to_unhalfop(Channel, << Modechange:8, R/binary >>, [Param|Rest]=Params, Addrem) ->    
+    case Modechange of
+        $+ ->	    
+            find_nicks_to_unhalfop(Channel, R, Params, add);
+	$- ->
+            find_nicks_to_unhalfop(Channel, R, Params, remove);
+        $h ->
+            if Addrem == add -> [Param];
+               true -> []
+            end	++ find_nicks_to_unhalfop(Channel, R, Rest, Addrem);
+        _Else ->
+            NewParams = case lists:member(Modechange, "klvhobeI") of
+			    true -> Rest;
+			    false -> Params
+			end,
+            find_nicks_to_unhalfop(Channel, R, NewParams, Addrem)
+    end;
+find_nicks_to_unhalfop(_Channel, _Modechanges, [], _Addrem) ->
+    [].
