@@ -471,6 +471,13 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
     ?DEBUG("New channel: ~p", [Channel_U]),
     State;
 
+irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
+    [Channel] = ets:lookup(State#state.channeltable, Channame),
+    Channel_U = esmisc:parsecmode(Channel, Modestring),
+    ets:insert(State#state.channeltable, Channel_U),
+    ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.

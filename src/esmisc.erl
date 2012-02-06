@@ -81,7 +81,8 @@ parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
 	    parsecmode(Operation, CU, MRest, Pall);
 	{false, remove, $k} ->
 	    CU = Channel#ircchannel{chankey=undefined},
-	    parsecmode(Operation, CU, MRest, Pall);
+	    [<<"*">>|PRest] = Pall,
+	    parsecmode(Operation, CU, MRest, PRest);
 	{false, add, $k} ->
 	    [Param|PRest] = Pall,
 	    CU = Channel#ircchannel{chankey=Param},	    
@@ -147,7 +148,7 @@ parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
     end.
 
 updateuser(UID, Operation, Privilege, Users) ->
-    Users_R = [E || {UID_E,_Privs}=E <- Users,
+    Users_R = [E || #ircchanuser{uid=UID_E}=E <- Users,
 		    UID_E =/= UID],
     Privilege_s = if Operation == add -> Privilege;
 		     true -> undefined end,
