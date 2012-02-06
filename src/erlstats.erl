@@ -20,6 +20,7 @@
 
 -record(state, {
 	  socket,
+	  sid,
 	  usertable,
 	  servertable,
 	  channeltable,
@@ -27,7 +28,8 @@
 	  connectiondetails,
 	  remotepassword,
 	  uplinkcapabilities,
-	  uplinkuid
+	  uplinkuid,
+	  plugins
 	 }).
 
 -define(SERVER, ?MODULE).
@@ -54,6 +56,8 @@ start_link(Args) ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Connectiondetails) ->
+    process_flag(trap_exit, true),
+    
     {ok, S} = gen_tcp:connect(Host, Port,
 			      [binary,
 			       {active, true},
@@ -75,12 +79,14 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
     
     {ok, #state{
        socket=S,
+       sid=SID,
        usertable=Usertable,
        servertable=Servertable,
        channeltable=Chantable,
        me=ME,
        connectiondetails=Connectiondetails,
-       remotepassword=Remotepassword
+       remotepassword=Remotepassword,
+       plugins=[]
       }}.
 
 %%--------------------------------------------------------------------
@@ -92,6 +98,59 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
+handle_call(register_plugin, {PID, _Tag}, State) ->
+    Plugins = State#state.plugins,
+
+    Plugin = #ircplugin{
+      pid=PID,
+      users=[]
+     },
+
+    Plugins_U = [Plugin|Plugins],
+
+    gen_server:cast(PID, initialize),
+
+    {reply, ok,
+     State#state{
+       plugins=Plugins_U
+      }
+    };
+
+handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PID, _Tag}, State) ->
+    Plugin = findplugin(State, PID),
+    Users = Plugin#ircplugin.users,
+    SID = State#state.sid,
+    UID = << SID/binary,
+	     NID/binary >>,
+    Serverdata_e = dict:new(),
+    Serverdata   = dict:store(description, MiscDescription, Serverdata_e),
+    User = #ircuser{
+      uid=UID,
+      sid=SID,
+      nick=Nick,
+      hop=0,    % Our own
+      ts=1337,  % Some time definitely lower than any real user, so we always have precedence
+      modes="", % No modes for our user
+      ident=Ident,
+      host=Host,
+      ip= << "127.0.0.1" >>,
+      realname=Gecos,
+      channels=sets:new(),
+      away=undefined,
+      authenticated=server,
+      serverdata=Serverdata
+     },
+    ts6:sts_newuser(State#state.socket, User),
+    Plugin_U = Plugin#ircplugin{
+		 users=[User|Users]
+		 },
+    Plugins_U = updateplugin(State, Plugin_U),
+    {reply, ok,
+     State#state{
+       plugins=Plugins_U
+      }
+    };
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -134,6 +193,9 @@ handle_info({tcp, _Socket, Data}, State) ->
     
     {noreply, Newstate};
 
+handle_info({'EXIT', FromPid, Reason}, State) ->
+    error_logger:info_msg("~p has died for reason ~p.", [FromPid, Reason]),
+    {noreply, State};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -146,6 +208,7 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) ->
+    error_logger:info_msg("Terminating!"),
     ok.
 
 %%--------------------------------------------------------------------
@@ -198,7 +261,7 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       host=Hostname,
       ip=Ipaddr,
       realname=Gecos,
-      channels=[],
+      channels=sets:new(),
       authenticated=false,
       away=undefined
      },
@@ -282,6 +345,9 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 			  [User#ircuser.nick, Newmodes, Resultingmodes]),
     State;
 
+%ircmode(sjoin, State, _Introducer, [TS, Name, Modes, UserUIDs]) ->
+%    Channel = 
+
 irccmd(Command, State, Instigator, Params) ->
     error_logger:info_msg("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
@@ -290,3 +356,23 @@ irccmd(Command, State, Instigator, Params) ->
 resolveuser(#state{usertable=UT}, UID) ->
     [User] = ets:lookup(UT, UID),
     User.
+
+findplugin(#state{plugins=P}, PID) ->
+    findplugin(P, PID);
+findplugin([#ircplugin{pid=PID}=Plugin|_R], PID) ->
+    Plugin;
+findplugin([_P|R], PID) ->
+    findplugin(R, PID).
+
+updateplugin(#state{plugins=P}, #ircplugin{pid=PID}=Updated_Plugin) ->
+    updateplugin(P, PID, Updated_Plugin).
+
+updateplugin([P|R], PID, Updated_Plugin) ->
+    [if
+	 P#ircplugin.pid == PID ->
+	     Updated_Plugin;
+	 true ->
+	     P
+     end|updateplugin(R, PID, Updated_Plugin)];
+updateplugin([], _PID, _Updated_Plugin) ->
+    [].

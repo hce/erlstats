@@ -7,9 +7,12 @@
 %%%-------------------------------------------------------------------
 -module(ts6).
 
+-include("erlstats.hrl").
+
 %% API
 -export([sts_login/5,
-	 sts_pong/2]).
+	 sts_pong/2,
+	 sts_newuser/2]).
 
 %%====================================================================
 %% API
@@ -31,7 +34,24 @@ sts_pong(S, Pongparam) ->
     gen_tcp:send(S, <<
 		      "PONG :", Pongparam/binary, 10
 		    >>).    
-    
+
+sts_newuser(S, Ircuser) ->
+    Hops_B     = list_to_binary(integer_to_list(Ircuser#ircuser.hop)),
+    TS_B       = list_to_binary(integer_to_list(Ircuser#ircuser.ts)),
+    Ircmodes_B = list_to_binary(Ircuser#ircuser.modes),
+    gen_tcp:send(S, <<
+		      ":", (Ircuser#ircuser.sid)/binary,
+		      " UID ",
+		      (Ircuser#ircuser.nick)/binary, " ",
+		      Hops_B/binary, " ",
+		      TS_B/binary, " ",
+		      "+", Ircmodes_B/binary, " ",
+		      (Ircuser#ircuser.ident)/binary, " ",
+		      (Ircuser#ircuser.host)/binary, " ",
+		      (Ircuser#ircuser.ip)/binary, " ",
+		      (Ircuser#ircuser.uid)/binary, " ",
+		      ":", (Ircuser#ircuser.realname)/binary, 10
+		    >>).
 
 
 %%====================================================================

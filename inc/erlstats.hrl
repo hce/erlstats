@@ -19,7 +19,8 @@
 		  realname,
 		  channels,
 		  away,
-		  authenticated}).
+		  authenticated,
+		  serverdata}).
 
 -record(ircchannel, {channame,
 		     bans,
@@ -36,3 +37,6 @@
 		    description,
 		    uplink}).
 
+-record(ircplugin, {pid,
+		    users}).
+		  
