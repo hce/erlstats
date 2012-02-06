@@ -100,6 +100,18 @@ handle_cast({irccmd, uid, Params}, State) ->
 	
     {noreply, Newstate};
 
+handle_cast({privmsg, greasel, I, help, User, []}, State) ->
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+                        <<
+                          "***** ", 2, "Greasel Help", 2, " *****", 10,
+                          "I'm HackINT's security ", 2, "greasel", 2, "!", 10, 32, 10,
+                          "äö.", 10, 32, 10,
+                          "I do not provide any direct user services. If you notice there", 10,
+                          "is little spam in hackint, it is partly due to my vigilance.", 10,
+                          "***** ", 2, "End of Help", 2, " *****"
+                        >>),
+        {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 

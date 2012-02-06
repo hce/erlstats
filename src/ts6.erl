@@ -101,11 +101,16 @@ sts_cmode(S, Modesetter, Channel, TS, Modes) ->
 		 >>).
 
 sts_notice(S, Noticer, Noticee, Notice) ->
+    Notice_lines = binary:split(Notice, << 10 >>, [global]),
+    lists:foreach(fun(Line) ->
+			  sts_notice(brokenup, S, Noticer, Noticee, Line)
+		  end, Notice_lines).
+
+sts_notice(brokenup, S, Noticer, Noticee, Notice) ->
     gen_tcp:send(S,
-		 <<
-		   ":", Noticer/binary, " NOTICE ",
-		   Noticee/binary, " :", Notice/binary, 10
-		 >>).
+		 [":", Noticer, " NOTICE ",
+		  Noticee, " :", Notice, 10
+		 ]).
 		   
 
 %%====================================================================

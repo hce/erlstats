@@ -94,7 +94,24 @@ handle_cast({irccmd, tmode, Params}, State) ->
 	true ->
 	    ok
     end,
-    {noreply, State};  
+    {noreply, State};
+
+handle_cast({privmsg, fricka, I, help, User, []}, State) ->
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			<<
+			  "***** ", 2, "Fricka Help", 2, " *****", 10,
+			  2, "Fricka", 2, " heiß' ich, und ", 2, "Fricka", 2, " bin ich!", 10, 32, 10,
+			  2, "Fricka", 2, " is a utility bot that can perform various services.", 10,
+			  "For example, it prevents people from acquiring halfop status", 10,
+			  "in channels, as halfops are still supported by some hackint", 10,
+			  "servers, but the network as a whole does not support them", 10,
+			  "anymore.", 10, 32, 10,
+			  "No further information is available ATM, but more", 10,
+			  "is to come.", 10,
+			  "***** ", 2, "End of Help", 2, " *****"
+			>>),
+    {noreply, State};
+
 handle_cast(_Info, State) ->
     {noreply, State}.
 

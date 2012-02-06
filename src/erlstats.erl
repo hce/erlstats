@@ -140,7 +140,6 @@ handle_call({register_plugin, Handledcommands}, {PID, _Tag}, State) ->
        pending_plugin_inits=PPI_U
       }
     };
-
 handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PID, _Tag}, State) ->
     Plugin = findplugin(State, PID),
     Users = Plugin#ircplugin.users,
@@ -148,7 +147,8 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PI
     UID = << SID/binary,
 	     NID/binary >>,
     Serverdata_e = dict:new(),
-    Serverdata   = dict:store(description, MiscDescription, Serverdata_e),
+    Serverdata_1 = dict:store(description, MiscDescription, Serverdata_e),
+    Serverdata   = dict:store(pluginpid, PID, Serverdata_1),
     User = #ircuser{
       uid=UID,
       sid=SID,
@@ -522,6 +522,14 @@ irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     
     State;
 
+irccmd(privmsg, State, Messager, [<< ChanType:8, ChanName/binary >>=Target, Message]) ->
+    case lists:member(ChanType, "#&+!") of
+	true ->
+	    handle_channel_privmsg(State, Messager, ChanName, Message);
+	false ->
+	    handle_nick_privmsg(State, Messager, Target, Message)
+    end;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
@@ -601,3 +609,46 @@ usersaffected(#state{usertable=Usertable}, SIDs) ->
 
 			      
 		      
+handle_channel_privmsg(State, _Messager, _ChanName, _Message) ->
+    State.
+
+handle_nick_privmsg(State, Messager, Nickname, Message) ->
+    User = find_plugin_user(State, Nickname),
+    Messager_User = resolveuser(State, Messager),
+    Nickname_Atom = list_to_existing_atom(string:to_lower(binary_to_list(Nickname))),
+    ?DEBUG("Message to ~p from ~p: ~p", [Nickname_Atom,
+					 Messager_User#ircuser.nick,
+					 Message]),
+
+    [Message_Cmd_B|Params] = binary:split(Message, <<" ">>, [global]),
+    Message_Cmd_A = try list_to_existing_atom(
+			  string:to_lower(
+			    binary_to_list(Message_Cmd_B))) of
+			Atom when is_atom(Atom) ->
+			    Atom
+		    catch _:_ ->
+			    unknown
+		    end,
+    
+    PID = dict:fetch(pluginpid, User#ircuser.serverdata),
+    gen_server:cast(PID, {privmsg, Nickname_Atom,
+			  User,
+			  Message_Cmd_A,
+			  Messager_User,
+			  Params}),
+    
+    State.
+
+
+find_plugin_user(State, Usernick) ->
+    Pluginusers =
+	lists:flatten(
+	  lists:foldl(fun(E, A) ->
+			      [E#ircplugin.users|A]
+		      end, [], State#state.plugins)),
+    find_plugin_user(search, Pluginusers, Usernick).
+
+find_plugin_user(search, [#ircuser{nick=Usernick}=User|_Rest], Usernick) ->
+    User;
+find_plugin_user(search, [_Someuser|Rest], Usernick) ->
+    find_plugin_user(search, Rest, Usernick).
