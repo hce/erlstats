@@ -18,7 +18,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--record(state, {}).
+-record(state, {
+	  greaseluser,    %% Our IRC "nick" greasel
+	  blacklistdb
+	 }).
 
 %%====================================================================
 %% API
@@ -46,7 +49,10 @@ init([]) ->
 		       uid  % We need to keep track of all users connecting to the server
 		      ],
     gen_server:call(erlstats, {register_plugin, Handledcommands}),
-    {ok, #state{}}.
+    Blacklistdb = ets:new(blacklistdb, [set, protected, {keypos, 2}]),
+    {ok, #state{
+       blacklistdb=Blacklistdb
+      }}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -68,17 +74,38 @@ handle_call(_Request, _From, State) ->
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast(initialize, State) ->
-    gen_server:call(erlstats, {register_user,
-			       << "GREASL" >>,
-			       << "greasel" >>, 
-			       << "~aeoe" >>,
-			       << "greasellab.oceanlab.research.hackint.org" >>,
-			       << "HackINT's Security Greasel" >>,
-			       << "IRC Security Greasel" >>}),
-    {noreply, State};
+    {ok, User} = gen_server:call(erlstats, {register_user,
+					   << "GREASL" >>,
+					   << "greasel" >>, 
+					   << "~aeoe" >>,
+					   << "greasellab.oceanlab.research.hackint.org" >>,
+					   << "HackINT's Security Greasel" >>,
+					   << "IRC Security Greasel" >>}),
+    {noreply, State#state{greaseluser=User}};
 
 handle_cast({irccmd, uid, Params}, State) ->
-    error_logger:info_msg("aeoe: New user - need to check host ~p", [Params#irccmduid.ip]),
+    esmisc:log("New user - need to check host ~p", [Params#irccmduid.ip]),
+    case checkblacklist(State#state.blacklistdb,
+			Params#irccmduid.ip) of
+	{true, Reason} ->
+	    esmisc:log("Need to KLINE/KILL user ~s!~s@~s (~p).", [Params#irccmduid.nick,
+								  Params#irccmduid.ident,
+								  Params#irccmduid.hostname,
+								  Params#irccmduid.gecos]),
+	    Reason_B = list_to_binary(Reason),
+	    erlstats:irc_kill((State#state.greaseluser)#ircuser.uid,
+			  Params#irccmduid.uid,
+			  << "You are blacklisted: ",
+			     Reason_B/binary >>),
+	    erlstats:irc_kline(Params#irccmduid.ip, 5760,
+			   << "To resolve your K-Line-issue, please send a mail "
+			      "klines@hackint.org with details about your IP and so forth." >>);
+	false ->
+	    esmisc:log("New user ~s!~s@~s (~p) is not blacklistsed.", [Params#irccmduid.nick,
+								       Params#irccmduid.ident,
+								       Params#irccmduid.hostname,
+								       Params#irccmduid.gecos])
+    end,
     {noreply, State};
 
 handle_cast(_Msg, State) ->
@@ -113,3 +140,40 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
+
+%% THE NEXT LINE ON DEBUGGING SERVERS ONLY!!1!
+%%%checkblacklist(_, _) -> {true, "Well, Test"};
+
+checkblacklist(lookup, IP) ->
+    Hosttocheck = binary_to_list(IP) ++ ".rbl.efnetrbl.org.",
+    case inet:getaddr(Hosttocheck, inet) of
+	{ok, {_, _, _, 4}} ->
+	    false; %% TOR
+	{ok, {_, _, _, Reasoncode}}->
+	    {true, "EFNet RBL " ++ reason(efnetrbl, Reasoncode)};
+	{error, _} ->
+	    false %% Not listed
+    end;
+checkblacklist(DB, IP) ->
+    Curtime = esmisc:curtime(),
+    case ets:lookup(DB, IP) of
+	[Entry] when Entry#blacklistentry.expirytime > Curtime ->
+	    esmisc:log("HIT for IP ~p", [IP]),
+	    Entry#blacklistentry.result;
+	_Else ->
+	    Result = checkblacklist(lookup, IP),
+	    Entry = #blacklistentry{
+	      ip=IP,
+	      expirytime=Curtime + 3600 * 24,
+	      result=Result
+	     },
+	    ets:insert(DB, Entry),
+	    esmisc:log("Added a new cache entry for IP ~p", [IP]),
+	    Result
+    end.
+
+reason(efnetrbl, 1) -> "Open Proxy";
+reason(efnetrbl, 2) -> "spamtrap666";
+reason(efnetrbl, 3) -> "spamtrap50";
+reason(efnetrbl, 5) -> "drones / flooding";
+reason(_, _) -> "Unknown reason".

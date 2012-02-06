@@ -12,7 +12,9 @@
 %% API
 -export([sts_login/5,
 	 sts_pong/2,
-	 sts_newuser/2]).
+	 sts_newuser/2,
+	 sts_kill/5,
+	 sts_kline/5]).
 
 %%====================================================================
 %% API
@@ -52,6 +54,31 @@ sts_newuser(S, Ircuser) ->
 		      (Ircuser#ircuser.uid)/binary, " ",
 		      ":", (Ircuser#ircuser.realname)/binary, 10
 		    >>).
+
+sts_kill(S, Killer, Killername, Killee, Reason) ->
+    gen_tcp:send(S,
+		 <<
+		   ":", Killer/binary, " KILL ",
+		   Killee/binary, " :", Killername/binary,
+		   " (", Reason/binary, ")", 10
+		 >>).
+
+sts_kline(S, Kliner, Host, Expiry, Reason) ->
+    Expiry_B = list_to_binary(integer_to_list(Expiry)),
+    gen_tcp:send(S,
+		 <<
+		   ":", Kliner/binary, " KLINE * ",
+		   Expiry_B/binary, " * ",
+		   Host/binary,
+		   " :", Reason/binary, 10
+		 >>),
+    gen_tcp:send(S,
+		 <<
+		   ":", Kliner/binary, " ENCAP * KLINE ",
+		   Expiry_B/binary, " * ",
+		   Host/binary,
+		   " :", Reason/binary, 10
+		 >>).
 
 
 %%====================================================================

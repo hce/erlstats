@@ -47,9 +47,13 @@
 			 hops,
 			 ts,
 			 modes,
+			 ident,
 			 hostname,
 			 ip,
 			 uid,
 			 gecos}).
 		 
+-record(blacklistentry, {ip,
+			 expirytime,
+			 result}).
 

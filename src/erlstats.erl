@@ -14,6 +14,12 @@
 %% API
 -export([start_link/1]).
 
+%% API functions
+-export([
+	 irc_kill/3,
+	 irc_kline/3
+	]).
+
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
@@ -157,16 +163,28 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PI
       authenticated=server,
       serverdata=Serverdata
      },
+    ets:insert(State#state.usertable, User),
     ts6:sts_newuser(State#state.socket, User),
     Plugin_U = Plugin#ircplugin{
 		 users=[User|Users]
 		 },
     Plugins_U = updateplugin(State, Plugin_U),
-    {reply, ok,
+    {reply, {ok, User},
      State#state{
        plugins=Plugins_U
       }
     };
+
+handle_call({irc_kill, Killer, Killee, Reason}, _From, State) ->
+    Killername = (resolveuser(State, Killer))#ircuser.nick,
+    ts6:sts_kill(State#state.socket, Killer, Killername, Killee, Reason),
+    ets:delete(State#state.usertable, Killee),
+    {reply, ok, State};
+
+handle_call({irc_kline, Host, Expiry, Reason}, _From, State) ->
+    ts6:sts_kline(State#state.socket, (State#state.me)#ircserver.hostname,
+		  Host, Expiry, Reason),
+    {reply, ok, State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -216,6 +234,14 @@ handle_info({'EXIT', FromPid, Reason}, State) ->
 
 handle_info(_Info, State) ->
     {noreply, State}.
+
+
+irc_kill(Killer, Killee, Reason) ->
+    gen_server:call(erlstats, {irc_kill, Killer, Killee, Reason}).
+
+irc_kline(Host, Timeout, Reason) ->
+    gen_server:call(erlstats, {irc_kline, Host, Timeout, Reason}).
+
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -295,6 +321,7 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       hops=Hops,
       ts=TS_I,
       modes=Parsedmodes,
+      ident=Ident,
       hostname=Hostname,
       ip=Ipaddr,
       uid=UID,
