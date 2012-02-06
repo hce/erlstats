@@ -40,9 +40,33 @@ start_link(Startargs) ->
 %% specifications.
 %%--------------------------------------------------------------------
 init([]) ->
-    AChild = {'Erlstats',{'erlstats',start_link,[["192.168.178.20", 6667, <<"stats.hackint.org">>, <<"00F">>, <<"barkbark!">>, <<"barkbark!">>, <<"HC's Erlang Modular Services Framework">>]]},
+    Erlstats = {'Erlstats',
+		{'erlstats',
+		 start_link,[
+			     ["192.168.178.20",
+			      6667,
+			      <<"stats.hackint.org">>,
+			      <<"00F">>,
+			      <<"barkbark!">>,
+			      <<"barkbark!">>,
+			      <<"HC's Erlang Modular Services Framework">>
+			     ]
+			    ]
+		},
 	      permanent,2000,worker,['erlstats']},
-    {ok,{{one_for_all,0,1}, [AChild]}}.
+
+    Greasel = {'Greasel',
+	       {'greasel',
+		start_link,[
+			   ]
+	       },
+	      permanent,2000,worker,['greasel']},
+
+    Plugins = [
+	       Greasel
+	      ],
+
+    {ok,{{one_for_all,0,1}, [Erlstats|Plugins]}}.
 
 %%====================================================================
 %% Internal functions

@@ -29,7 +29,9 @@
 	  remotepassword,
 	  uplinkcapabilities,
 	  uplinkuid,
-	  plugins
+	  plugins,
+	  initialized,
+	  pending_plugin_inits
 	 }).
 
 -define(SERVER, ?MODULE).
@@ -86,7 +88,9 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
        me=ME,
        connectiondetails=Connectiondetails,
        remotepassword=Remotepassword,
-       plugins=[]
+       plugins=[],
+       initialized=false,
+       pending_plugin_inits=[]
       }}.
 
 %%--------------------------------------------------------------------
@@ -100,19 +104,29 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
 %%--------------------------------------------------------------------
 handle_call(register_plugin, {PID, _Tag}, State) ->
     Plugins = State#state.plugins,
+    PPI = State#state.pending_plugin_inits,
 
     Plugin = #ircplugin{
       pid=PID,
       users=[]
      },
-
     Plugins_U = [Plugin|Plugins],
 
-    gen_server:cast(PID, initialize),
-
+    %% If we are already initialised,
+    %% our plugin can initialise right away.
+    %% Otherwise, postpone the plugin initialisation
+    PPI_U = case State#state.initialized of
+		true ->
+		    gen_server:cast(PID, initialize),
+		    PPI;
+		false ->
+		    [PID|PPI]
+	    end,
+    
     {reply, ok,
      State#state{
-       plugins=Plugins_U
+       plugins=Plugins_U,
+       pending_plugin_inits=PPI_U
       }
     };
 
@@ -320,7 +334,11 @@ irccmd(server, State, [], [ServerHostname, Hops, ServerDescription]) ->
     State;
 
 irccmd(svinfo, State, [], _Parameters) ->
-    State;
+    lists:foreach(fun(PID) ->
+			  gen_server:cast(PID, initialize)
+		  end, State#state.pending_plugin_inits),
+    State#state{initialized=true,
+		pending_plugin_inits=[]};
 
 irccmd(nick, State, NickChanger, [Newnick, TS]) ->
     User = resolveuser(State, NickChanger),
