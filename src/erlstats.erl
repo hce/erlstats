@@ -368,12 +368,26 @@ irccmd(capab, State, [], [CapabilityList]) ->
      };
 
 irccmd(server, State, [], [ServerHostname, Hops, ServerDescription]) ->
+    Hops_I = list_to_integer(binary_to_list(Hops)),
     Server = #ircserver{
       sid=State#state.uplinkuid,
       hostname=ServerHostname,
-      distance=Hops,
+      distance=Hops_I,
       description=ServerDescription,
       uplink=undefined % Direct connection
+     },
+    error_logger:info_msg("New IRC server: ~p", [Server]),
+    ets:insert(State#state.servertable, Server),
+    State;
+
+irccmd(sid, State, Uplink, [Servername, Hops, SID, Serverdescription]) ->
+    Hops_I = list_to_integer(binary_to_list(Hops)),
+    Server = #ircserver{
+      sid=SID,
+      hostname=Servername,
+      distance=Hops_I,
+      description=Serverdescription,
+      uplink=Uplink
      },
     error_logger:info_msg("New IRC server: ~p", [Server]),
     ets:insert(State#state.servertable, Server),
