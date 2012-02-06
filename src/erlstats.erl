@@ -393,6 +393,23 @@ irccmd(sid, State, Uplink, [Servername, Hops, SID, Serverdescription]) ->
     ets:insert(State#state.servertable, Server),
     State;
 
+irccmd(squit, State, [], [SID, Reason]) ->
+    Affected_servers = serversbehind(State, SID),
+    Affected_users = usersaffected(State, Affected_servers),
+    error_logger:info_msg("Server ~p split, reason: ~p. Affected servers: ~p. Affected users: ~p",
+			  [SID, Reason, Affected_servers,
+			   length(Affected_users)]),
+    lists:foreach(fun(E) ->
+			  ets:delete(State#state.servertable, E)
+		  end, Affected_servers),
+    lists:foreach(fun(E) ->
+			  ets:delete(State#state.usertable, E)
+		  end, Affected_users),
+    ?DEBUG("Servertable now ~p entries, user table ~p entries.",
+	   [ets:info(State#state.servertable, size),
+	    ets:info(State#state.usertable, size)]),
+    State;
+
 irccmd(svinfo, State, [], _Parameters) ->
     lists:foreach(fun(PID) ->
 			  gen_server:cast(PID, initialize)
@@ -465,3 +482,43 @@ plugincommand(#state{plugins=P}, Command, Params) ->
     lists:foreach(fun(#ircplugin{pid=PID}) ->
 			  gen_server:cast(PID, {irccmd, Command, Params})
 		  end, Handlingplugins).
+
+
+serversbehind(#state{servertable=Servertable}, SID) ->
+    Servers = ets:foldl(fun(E, A) ->
+				[E|A]
+			end, [], Servertable),
+    serversbehind(Servers, [SID]);
+
+serversbehind(Servers, SIDs) ->
+    Matching_Servers = serversbehind_filter(Servers, SIDs),
+    if
+	Matching_Servers =:= SIDs ->
+	    Matching_Servers;
+	true ->
+	    serversbehind(Servers, Matching_Servers)
+    end.
+
+serversbehind_filter(Servers, SIDs) when is_list(SIDs) ->
+    lists:usort(
+      lists:foldl(fun(Server, A) ->
+			  case lists:member(Server#ircserver.uplink, SIDs) of
+			      true ->
+				  [Server#ircserver.sid|A];
+			      false ->
+				  A
+			  end
+		  end, [], Servers) ++ SIDs).
+    
+usersaffected(#state{usertable=Usertable}, SIDs) ->
+    ets:foldl(fun(E, A) ->
+		      case lists:member(E#ircuser.sid, SIDs) of
+			  true ->
+			      [E#ircuser.uid|A];
+			  false ->
+			      A
+		      end
+	      end, [], Usertable).
+
+			      
+		      
