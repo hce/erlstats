@@ -20,7 +20,8 @@
 
 -record(state, {
 	  greaseluser,    %% Our IRC "nick" greasel
-	  blacklistdb
+	  blacklistdb,
+	  checkblacklist
 	 }).
 
 %%====================================================================
@@ -50,8 +51,10 @@ init([]) ->
 		      ],
     gen_server:call(erlstats, {register_plugin, Handledcommands}),
     Blacklistdb = ets:new(blacklistdb, [set, protected, {keypos, 2}]),
+    timer:send_after(4200, start_to_check),
     {ok, #state{
-       blacklistdb=Blacklistdb
+       blacklistdb=Blacklistdb,
+       checkblacklist=false
       }}.
 
 %%--------------------------------------------------------------------
@@ -85,28 +88,17 @@ handle_cast(initialize, State) ->
 
 handle_cast({irccmd, uid, Params}, State) ->
     esmisc:log("New user - need to check host ~p", [Params#irccmduid.ip]),
-    case checkblacklist(State#state.blacklistdb,
-			Params#irccmduid.ip) of
-	{true, Reason} ->
-	    esmisc:log("Need to KLINE/KILL user ~s!~s@~s (~p).", [Params#irccmduid.nick,
-								  Params#irccmduid.ident,
-								  Params#irccmduid.hostname,
-								  Params#irccmduid.gecos]),
-	    Reason_B = list_to_binary(Reason),
-	    erlstats:irc_kill((State#state.greaseluser)#ircuser.uid,
-			  Params#irccmduid.uid,
-			  << "You are blacklisted: ",
-			     Reason_B/binary >>),
-	    erlstats:irc_kline(Params#irccmduid.ip, 5760,
-			   << "To resolve your K-Line-issue, please send a mail "
-			      "klines@hackint.org with details about your IP and so forth." >>);
-	false ->
-	    esmisc:log("New user ~s!~s@~s (~p) is not blacklistsed.", [Params#irccmduid.nick,
-								       Params#irccmduid.ident,
-								       Params#irccmduid.hostname,
-								       Params#irccmduid.gecos])
-    end,
-    {noreply, State};
+
+    Newstate = case State#state.checkblacklist of
+		   true ->
+		       check_blacklist(State, Params);
+		   false ->
+		       esmisc:log("Not checking agains blacklist yet (IP ~p)",
+				  [Params#irccmduid.ip]),
+		       State
+	       end,
+	
+    {noreply, Newstate};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -117,6 +109,9 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
+handle_info(start_to_check, State) ->
+    error_logger:info_msg("The greasel is now sharp."),
+    {noreply, State#state{checkblacklist=true}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -177,3 +172,27 @@ reason(efnetrbl, 2) -> "spamtrap666";
 reason(efnetrbl, 3) -> "spamtrap50";
 reason(efnetrbl, 5) -> "drones / flooding";
 reason(_, _) -> "Unknown reason".
+
+check_blacklist(State, Params) ->
+    case checkblacklist(State#state.blacklistdb,
+			Params#irccmduid.ip) of
+	{true, Reason} ->
+	    esmisc:log("Need to KLINE/KILL user ~s!~s@~s (~p).", [Params#irccmduid.nick,
+								  Params#irccmduid.ident,
+								  Params#irccmduid.hostname,
+								  Params#irccmduid.gecos]),
+	    Reason_B = list_to_binary(Reason),
+	    erlstats:irc_kill((State#state.greaseluser)#ircuser.uid,
+			      Params#irccmduid.uid,
+			      << "You are blacklisted: ",
+			     Reason_B/binary >>),
+	    erlstats:irc_kline(Params#irccmduid.ip, 5760,
+			       << "To resolve your K-Line-issue, please send a mail "
+				  "klines@hackint.org with details about your IP and so forth." >>);
+	false ->
+	    esmisc:log("New user ~s!~s@~s (~p) is not blacklistsed.", [Params#irccmduid.nick,
+								       Params#irccmduid.ident,
+								       Params#irccmduid.hostname,
+								       Params#irccmduid.gecos])
+    end,
+    State.
