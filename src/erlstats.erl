@@ -36,6 +36,8 @@
 
 -define(SERVER, ?MODULE).
 
+-define(DEBUG, esmisc:log).
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -188,7 +190,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     Len = size(Data) - 2,  % Substract the length of \r\n
     << Data_wr:Len/binary, _CRLF/binary >> = Data,
 
-    error_logger:info_msg("Parsing ~p", [Data_wr]),
+    ?DEBUG("Parsing ~p", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_lower = string:to_lower(binary_to_list(Command)),
@@ -222,7 +224,7 @@ handle_info(_Info, State) ->
 %% The return value is ignored.
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) ->
-    error_logger:info_msg("Terminating!"),
+    ?DEBUG("Terminating!"),
     ok.
 
 %%--------------------------------------------------------------------
@@ -249,7 +251,7 @@ parseline(rest, Line) ->
     NormalParamList ++ Textparam.
 
 irccmd(notice, State, Instigator, [<<"AUTH">>, Authprocess]) ->
-    error_logger:info_msg("Authentication Handshake with ~p: ~p", [Instigator, Authprocess]),
+    ?DEBUG("Authentication Handshake with ~p: ~p", [Instigator, Authprocess]),
     State;
 
 irccmd(notice, State, Instigator, Params) ->
@@ -257,7 +259,7 @@ irccmd(notice, State, Instigator, Params) ->
     State;
 
 irccmd(ping, State, [], [Pongparam]) ->
-    error_logger:info_msg("Sending PONG ~p", [Pongparam]),
+    ?DEBUG("Sending PONG ~p", [Pongparam]),
     ts6:sts_pong(State#state.socket, Pongparam),
     State;
 
@@ -282,12 +284,12 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
 
     ets:insert(State#state.usertable, User),
 
-    error_logger:info_msg("New user: ~p", [User]),
+    ?DEBUG("New user: ~p", [User]),
     
     State;
 
 irccmd(kill, State, Killer, [Killee, Reason]) ->
-    error_logger:info_msg("Received KILL for ~p from ~p (Reason ~p)",
+    ?DEBUG("Received KILL for ~p from ~p (Reason ~p)",
 			  [(resolveuser(State, Killee))#ircuser.nick,
 			   (resolveuser(State, Killer))#ircuser.nick,
 			   Reason]),
@@ -295,7 +297,7 @@ irccmd(kill, State, Killer, [Killee, Reason]) ->
     State;
 
 irccmd(quit, State, Quitter, [Reason]) ->
-    error_logger:info_msg("User ~p quit (Reason: ~p)",
+    ?DEBUG("User ~p quit (Reason: ~p)",
 			  [(resolveuser(State, Quitter))#ircuser.nick,
 			   Reason]),
     ets:delete(State#state.usertable, Quitter),
@@ -308,7 +310,7 @@ irccmd(pass, State, [], [RemotePassword, TS, TS_Version, Uplink_UID]) ->
 	true ->
 	    error_logger:info_msg("Server ~p correctly authenticated with us.", [Uplink_UID])
     end,
-    error_logger:info_msg("TS params of server: ~p ~p",
+    ?DEBUG("TS params of server: ~p ~p",
 			  [TS, TS_Version]),
     State#state{
       uplinkuid=Uplink_UID
@@ -316,7 +318,7 @@ irccmd(pass, State, [], [RemotePassword, TS, TS_Version, Uplink_UID]) ->
 
 irccmd(capab, State, [], [CapabilityList]) ->
     Capabilities = binary:split(CapabilityList, << " " >>, [global]),
-    error_logger:info_msg("Our uplink's capabilities: ~p", [Capabilities]),
+    ?DEBUG("Our uplink's capabilities: ~p", [Capabilities]),
     State#state{
       uplinkcapabilities=Capabilities
      };
@@ -342,7 +344,7 @@ irccmd(svinfo, State, [], _Parameters) ->
 
 irccmd(nick, State, NickChanger, [Newnick, TS]) ->
     User = resolveuser(State, NickChanger),
-    error_logger:info_msg("~p (~p) is changing their nick to ~p at ~p",
+    ?DEBUG("~p (~p) is changing their nick to ~p at ~p",
 			  [User#ircuser.nick, NickChanger,
 			   Newnick, TS]),
     User_Updated = User#ircuser{
@@ -359,7 +361,7 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 		     modes=Resultingmodes
 		    },
     ets:insert(State#state.usertable, User_Updated),
-    error_logger:info_msg("Mode change for user ~p: ~p => ~p",
+    ?DEBUG("Mode change for user ~p: ~p => ~p",
 			  [User#ircuser.nick, Newmodes, Resultingmodes]),
     State;
 
@@ -367,7 +369,7 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 %    Channel = 
 
 irccmd(Command, State, Instigator, Params) ->
-    error_logger:info_msg("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
+    ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
 
 

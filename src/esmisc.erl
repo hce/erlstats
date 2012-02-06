@@ -11,7 +11,15 @@
 -export([
 	 curtime/0,
 	 parseumode/1,
-	 parseumode/2
+	 parseumode/2,
+	 openlog/0,
+	 log/1,
+	 log/2
+	]).
+
+%% Spawn functions
+-export([
+	 logger/1
 	]).
 
 %%====================================================================
@@ -47,6 +55,31 @@ parseumode(_Operation, Curmodes, << >>) ->
     Curmodes.
 
 
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
+openlog() ->
+    %%Logpath = code:priv_dir(erlstats),
+    Logpath = "priv",
+    Logfile = filename:join(Logpath, "erlstats.log"),
+    {ok, F} = file:open(Logfile, [write]),
+    LP = spawn(?MODULE, logger, [F]),
+    register(logger, LP).
+
+log(S) ->
+    logger ! {log, S}.
+
+log(S, F) ->
+    R = io_lib:format(S, F),
+    logger ! {log, R}.
+
+logger(F) ->
+    receive
+	{log, Stuff} ->
+	    file:write(F, Stuff),
+	    file:write(F, << "\n" >>),
+	    logger(F);
+	Else ->
+	    error_logger:info_msg("Unknown log message ~p!", [Else])
+    end.
