@@ -202,6 +202,12 @@ handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
     ets:insert(State#state.channeltable, Channel_U),
     {reply, ok, State};
 
+handle_call(getusertable, _From, State) ->
+    {reply, {ok, State#state.usertable}, State};
+
+handle_call(getservertable, _From, State) ->
+    {reply, {ok, State#state.servertable}, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
