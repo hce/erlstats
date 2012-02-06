@@ -23,7 +23,11 @@
 	  usertable,
 	  servertable,
 	  channeltable,
-	  me
+	  me,
+	  connectiondetails,
+	  remotepassword,
+	  uplinkcapabilities,
+	  uplinkuid
 	 }).
 
 -define(SERVER, ?MODULE).
@@ -49,7 +53,7 @@ start_link(Args) ->
 %%                         {stop, Reason}
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
-init([Host, Port, Nodename, SID, Password, Node_Description]) ->
+init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Connectiondetails) ->
     {ok, S} = gen_tcp:connect(Host, Port,
 			      [binary,
 			       {active, true},
@@ -74,7 +78,9 @@ init([Host, Port, Nodename, SID, Password, Node_Description]) ->
        usertable=Usertable,
        servertable=Servertable,
        channeltable=Chantable,
-       me=ME
+       me=ME,
+       connectiondetails=Connectiondetails,
+       remotepassword=Remotepassword
       }}.
 
 %%--------------------------------------------------------------------
@@ -109,7 +115,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     Len = size(Data) - 2,  % Substract the length of \r\n
     << Data_wr:Len/binary, _CRLF/binary >> = Data,
 
-    io:format("Parsing ~p~n", [Data_wr]),
+    error_logger:info_msg("Parsing ~p", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_lower = string:to_lower(binary_to_list(Command)),
@@ -216,6 +222,41 @@ irccmd(quit, State, Quitter, [Reason]) ->
 			  [(resolveuser(State, Quitter))#ircuser.nick,
 			   Reason]),
     ets:delete(State#state.usertable, Quitter),
+    State;
+
+irccmd(pass, State, [], [RemotePassword, TS, TS_Version, Uplink_UID]) ->
+    if
+	State#state.remotepassword =/= RemotePassword ->
+	    error_logger:info_msg("Server ~p authenticated with the wrong password!", [Uplink_UID]);
+	true ->
+	    error_logger:info_msg("Server ~p correctly authenticated with us.", [Uplink_UID])
+    end,
+    error_logger:info_msg("TS params of server: ~p ~p",
+			  [TS, TS_Version]),
+    State#state{
+      uplinkuid=Uplink_UID
+     };
+
+irccmd(capab, State, [], [CapabilityList]) ->
+    Capabilities = binary:split(CapabilityList, << " " >>, [global]),
+    error_logger:info_msg("Our uplink's capabilities: ~p", [Capabilities]),
+    State#state{
+      uplinkcapabilities=Capabilities
+     };
+
+irccmd(server, State, [], [ServerHostname, Hops, ServerDescription]) ->
+    Server = #ircserver{
+      sid=State#state.uplinkuid,
+      hostname=ServerHostname,
+      distance=Hops,
+      description=ServerDescription,
+      uplink=undefined % Direct connection
+     },
+    error_logger:info_msg("New IRC server: ~p", [Server]),
+    ets:insert(State#state.servertable, Server),
+    State;
+
+irccmd(svinfo, State, [], _Parameters) ->
     State;
 
 irccmd(Command, State, Instigator, Params) ->
