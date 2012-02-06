@@ -18,6 +18,11 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
+%% Plugin command information
+-export([cmdlist/1, cmdhelp/2,
+	 cmdperm/2, cmdgenericinfo/1]).
+
+
 -record(state, {
 	  greaseluser,    %% Our IRC "nick" greasel
 	  blacklistdb,
@@ -81,9 +86,9 @@ handle_cast(initialize, State) ->
 					   << "GREASL" >>,
 					   << "greasel" >>, 
 					   << "~aeoe" >>,
-					   << "greasellab.oceanlab.research.hackint.org" >>,
+					   << "services." >>,
 					   << "HackINT's Security Greasel" >>,
-					   << "IRC Security Greasel" >>}),
+					   << "IRC Security Greasel" >>, ?MODULE}),
     {noreply, State#state{greaseluser=User}};
 
 handle_cast({irccmd, uid, Params}, State) ->
@@ -93,27 +98,70 @@ handle_cast({irccmd, uid, Params}, State) ->
 		   true ->
 		       check_blacklist(State, Params);
 		   false ->
-		       esmisc:log("Not checking agains blacklist yet (IP ~p)",
+		       esmisc:log("Not checking against blacklist yet (IP ~p)",
 				  [Params#irccmduid.ip]),
 		       State
 	       end,
 	
     {noreply, Newstate};
 
-handle_cast({privmsg, greasel, I, help, User, []}, State) ->
-    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-                        <<
-                          "***** ", 2, "Greasel Help", 2, " *****", 10,
-                          "I'm HackINT's security ", 2, "greasel", 2, "!", 10, 32, 10,
-                          "äö.", 10, 32, 10,
-                          "I do not provide any direct user services. If you notice there", 10,
-                          "is little spam in hackint, it is partly due to my vigilance.", 10,
-                          "***** ", 2, "End of Help", 2, " *****"
-                        >>),
-        {noreply, State};
+handle_cast({privmsg, greasel, I, checkhost, User, [Hosttocheck]}, State) ->
+    Result = case inet:getaddr(binary_to_list(Hosttocheck), inet) of
+		 {ok, {A, B, C, D}} ->
+		     checkblacklist(State#state.blacklistdb,
+				    iolist_to_binary(io_lib:format("~p.~p.~p.~p", [A, B, C, D])));
+		 _Else ->
+		     cantresolve
+	     end,
+    case Result of
+	{true, Reason} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("~s is listed for the following reason: ~s.",
+					      [Hosttocheck, Reason]));
+	false ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("~s is not listed.", [Hosttocheck]));
+	cantresolve ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("~s can not be resolved.", [Hosttocheck]))
+    end,
+
+    {noreply, State};
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
+
+
+%% A list of plugin commands accessible through IRC
+cmdlist(greasel) ->
+    [
+     checkhost
+    ].
+
+%% The help for each command accessible through IRC
+cmdhelp(greasel, checkhost) ->
+    [
+     {params,    [<<"HOSTNAME">>]},
+     {shortdesc, <<"Check if \^bHOSTNAME\^b is blacklisted">>},
+     {longdesc,  <<"The \^bCHECKHOST\^b command checks if \^bHOSTNAME\^b\n",
+		   "is blacklisted. The way this check is performed is the same\n",
+		   "as when a user connects to hackint.">>}
+     ].
+
+%% The permissions required to use a certain command
+cmdperm(greasel, checkhost) ->
+    "o".
+
+%% Generic information to be displayed when HELP
+%% is called without parameters
+cmdgenericinfo(greasel) ->
+    <<
+      "I'm HackINT's security \^bgreasel\^b!\n \n"
+     "äö.\n \n"
+     "I do not provide any direct user services. If you notice there\n"
+     "is little spam in hackint, it is partly due to my vigilance."
+    >>.
+
 
 %%--------------------------------------------------------------------
 %% Function: handle_info(Info, State) -> {noreply, State} |
@@ -213,7 +261,8 @@ check_blacklist(State, Params) ->
 			      Params#irccmduid.uid,
 			      << "You are blacklisted: ",
 			     Reason_B/binary >>),
-	    erlstats:irc_kline(Params#irccmduid.ip, 5760,
+	    erlstats:irc_kline((State#state.greaseluser)#ircuser.uid,
+			       Params#irccmduid.ip, 5760,
 			       << "To resolve your K-Line-issue, please send a mail "
 				  "klines@hackint.org with details about your IP and so forth." >>);
 	false ->

@@ -68,21 +68,21 @@ sts_kill(S, Killer, Killername, Killee, Reason) ->
 		 >>).
 
 sts_kline(S, Kliner, Host, Expiry, Reason) ->
-    Expiry_B = list_to_binary(integer_to_list(Expiry)),
+    Expiry_B = integer_to_list(Expiry),
     gen_tcp:send(S,
-		 <<
-		   ":", Kliner/binary, " KLINE * ",
-		   Expiry_B/binary, " * ",
-		   Host/binary,
-		   " :", Reason/binary, 10
-		 >>),
+		 [
+		  ":", Kliner, " KLINE * ",
+		  Expiry_B, " * ",
+		  Host,
+		  " :", Reason, 10
+		 ]),
     gen_tcp:send(S,
-		 <<
-		   ":", Kliner/binary, " ENCAP * KLINE ",
-		   Expiry_B/binary, " * ",
-		   Host/binary,
-		   " :", Reason/binary, 10
-		 >>).
+		 [
+		  ":", Kliner, " ENCAP * KLINE ",
+		  Expiry_B, " * ",
+		  Host,
+		  " :", Reason, 10
+		 ]).
 
 sts_cmode(S, Modesetter, Channel, TS, Modes) ->
     TS_B = list_to_binary(integer_to_list(TS)),
@@ -101,7 +101,7 @@ sts_cmode(S, Modesetter, Channel, TS, Modes) ->
 		 >>).
 
 sts_notice(S, Noticer, Noticee, Notice) ->
-    Notice_lines = binary:split(Notice, << 10 >>, [global]),
+    Notice_lines = binary:split(iolist_to_binary(Notice), << 10 >>, [global]),
     lists:foreach(fun(Line) ->
 			  sts_notice(brokenup, S, Noticer, Noticee, Line)
 		  end, Notice_lines).

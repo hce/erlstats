@@ -74,9 +74,9 @@ handle_cast(initialize, State) ->
 					    << "FRICKA" >>,
 					    << "fricka" >>,
 					    << "~hs" >>,
-					    << "research.hackint.org" >>,
+					    << "services." >>,
 					    << "Fricka" >>,
-					    << "Frech wacht Fricka ueber's HackINT" >>}),
+					    << "Frech wacht Fricka ueber's HackINT" >>, ?MODULE}),
     {noreply, State#state{frickauser=User}};
 handle_cast({irccmd, tmode, Params}, State) ->
     Channame = Params#irccmdtmode.channame,

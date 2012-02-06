@@ -17,7 +17,7 @@
 %% API functions
 -export([
 	 irc_kill/3,
-	 irc_kline/3,
+	 irc_kline/4,
 	 irc_cmode/3,
 	 irc_notice/3
 	]).
@@ -140,7 +140,7 @@ handle_call({register_plugin, Handledcommands}, {PID, _Tag}, State) ->
        pending_plugin_inits=PPI_U
       }
     };
-handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PID, _Tag}, State) ->
+handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription, Sourcemodule}, {PID, _Tag}, State) ->
     Plugin = findplugin(State, PID),
     Users = Plugin#ircplugin.users,
     SID = State#state.sid,
@@ -148,7 +148,8 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription}, {PI
 	     NID/binary >>,
     Serverdata_e = dict:new(),
     Serverdata_1 = dict:store(description, MiscDescription, Serverdata_e),
-    Serverdata   = dict:store(pluginpid, PID, Serverdata_1),
+    Serverdata_2 = dict:store(pluginpid, PID, Serverdata_1),
+    Serverdata   = dict:store(pluginmodule, Sourcemodule, Serverdata_2),
     User = #ircuser{
       uid=UID,
       sid=SID,
@@ -183,8 +184,8 @@ handle_call({irc_kill, Killer, Killee, Reason}, _From, State) ->
     ets:delete(State#state.usertable, Killee),
     {reply, ok, State};
 
-handle_call({irc_kline, Host, Expiry, Reason}, _From, State) ->
-    ts6:sts_kline(State#state.socket, (State#state.me)#ircserver.hostname,
+handle_call({irc_kline, Kliner, Host, Expiry, Reason}, _From, State) ->
+    ts6:sts_kline(State#state.socket, Kliner,
 		  Host, Expiry, Reason),
     {reply, ok, State};
 
@@ -203,11 +204,6 @@ handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
     ets:insert(State#state.channeltable, Channel_U),
     {reply, ok, State};
 
-handle_call({irc_notice, Noticer, Noticee, Notice}, _From, State) ->
-    ts6:sts_notice(State#state.socket,
-		   Noticer, Noticee, Notice),
-    {reply, ok, State};
-
 handle_call(getusertable, _From, State) ->
     {reply, {ok, State#state.usertable}, State};
 
@@ -224,6 +220,11 @@ handle_call(_Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
+handle_cast({irccmd_notice, Noticer, Noticee, Notice}, State) ->
+    ts6:sts_notice(State#state.socket,
+		   Noticer, Noticee, Notice),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -267,14 +268,14 @@ handle_info(_Info, State) ->
 irc_kill(Killer, Killee, Reason) ->
     gen_server:call(erlstats, {irc_kill, Killer, Killee, Reason}).
 
-irc_kline(Host, Timeout, Reason) ->
-    gen_server:call(erlstats, {irc_kline, Host, Timeout, Reason}).
+irc_kline(Kliner, Host, Timeout, Reason) ->
+    gen_server:call(erlstats, {irc_kline, Kliner, Host, Timeout, Reason}).
 
 irc_cmode(Modesetter, Channel, Modes) ->
     gen_server:call(erlstats, {irc_cmode, Modesetter, Channel, Modes}).
 
 irc_notice(Noticer, Noticee, Notice) ->
-    gen_server:call(erlstats, {irc_notice, Noticer, Noticee, Notice}).
+    gen_server:cast(erlstats, {irccmd_notice, Noticer, Noticee, Notice}).
 
 
 %%--------------------------------------------------------------------
@@ -629,16 +630,84 @@ handle_nick_privmsg(State, Messager, Nickname, Message) ->
 		    catch _:_ ->
 			    unknown
 		    end,
-    
+
     PID = dict:fetch(pluginpid, User#ircuser.serverdata),
-    gen_server:cast(PID, {privmsg, Nickname_Atom,
-			  User,
-			  Message_Cmd_A,
-			  Messager_User,
-			  Params}),
+    case {Message_Cmd_A, Params} of
+	{help, [Subcommand_I|_]} ->
+	    Subcommand = list_to_existing_atom(
+			   string:to_lower(
+			     binary_to_list(Subcommand_I))),
+	    handle_plugin_help(User,
+			       Messager_User,
+			       dict:fetch(pluginmodule, User#ircuser.serverdata),
+			       Nickname_Atom,
+			       Subcommand);
+	 {help, []} ->
+	    handle_plugin_help(User, Messager_User,
+			       dict:fetch(pluginmodule, User#ircuser.serverdata),
+			       Nickname_Atom);
+	_Else ->
+	    gen_server:cast(PID, {privmsg, Nickname_Atom,
+				  User,
+				  Message_Cmd_A,
+				  Messager_User,
+				  Params})
+    end,
     
     State.
 
+handle_plugin_help(Pluginuser,
+		   Askeruser, Pluginmodule,
+		   Nickname, Command) ->
+    AskerUID = Askeruser#ircuser.uid,
+    Nickname_U = string:to_upper(atom_to_list(Nickname)),
+    Command_U  = string:to_upper(atom_to_list(Command)),
+    try erlang:apply(Pluginmodule, cmdhelp, [Nickname, Command]) of
+	Proplist when is_list(Proplist) ->
+	    {longdesc, Longdesc} = lists:keyfind(longdesc, 1, Proplist),
+	    MSG = ["***** \^b", Nickname_U, " Help\^b *****\n"
+		   "Help for \^b", Command_U, "\^b:\n \n",
+		   Longdesc,
+		  "\n***** \^bEnd of Help\^b *****"],
+	    irc_notice(Pluginuser#ircuser.uid,
+		       AskerUID,
+		       MSG);
+	Else ->
+	    error_logger:info_msg("Erraneous command help ~p", [Else])
+    catch _:_ ->
+	    irc_notice(Pluginuser#ircuser.uid,
+		       AskerUID,
+		       io_lib:format("No help available for ~p", [Command]))
+    end.
+
+handle_plugin_help(Pluginuser,
+		   Askeruser, Pluginmodule,
+		   Nickname) ->
+    AskerUID = Askeruser#ircuser.uid,
+    Nickname_U = string:to_upper(atom_to_list(Nickname)),
+    try {erlang:apply(Pluginmodule, cmdgenericinfo, [Nickname]),
+	 erlang:apply(Pluginmodule, cmdlist, [Nickname])} of
+	{Desc, Cmdlist} ->
+	    MSG = ["***** \^b", Nickname_U, " Help\^b *****\n",
+		   Desc,
+		   "\n \nThe following commands are available:\n",
+		   help_format_commands(Pluginmodule, Nickname,
+					Askeruser#ircuser.modes),
+		  "\n***** \^bEnd of Help\^b *****"],
+	    irc_notice(Pluginuser#ircuser.uid,
+		       AskerUID,
+		       MSG);
+	Else ->
+	    error_logger:info_msg("Erraneous command help ~p", [Else])
+    catch _:_ ->
+	    irc_notice(Pluginuser#ircuser.uid,
+		       AskerUID,
+		       "No generic help available for this plugin - REPORT THIS AS A BUG!")
+    end.
+
+help_format_commands(Pluginmodule, Nickname,
+		     Askermodes) ->
+    [].
 
 find_plugin_user(State, Usernick) ->
     Pluginusers =
