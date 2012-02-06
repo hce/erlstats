@@ -3,7 +3,7 @@
   {vsn, "1"},
   {modules, [erlstats_app, erlstats,
 	     erlstats_supervisor, esmisc,
-	     ts6]},
+	     ts6, greasel]},
   {registered, [erlstats]},
   {applications, [kernel, stdlib, sasl]},
   {mod, {erlstats_app,[]}}
