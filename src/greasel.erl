@@ -152,7 +152,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%%checkblacklist(_, _) -> {true, "Well, Test"};
 
 checkblacklist(lookup, IP) ->
-    Hosttocheck = binary_to_list(IP) ++ ".rbl.efnetrbl.org.",
+    IP_2 = case binary:split(IP, <<".">>, [global]) of
+	       [A, B, C, D] ->
+		   [D, ".", C, ".", B, ".", A];
+	       Else ->
+		   Else
+	   end,
+    Hosttocheck = binary_to_list(iolist_to_binary(IP_2)) ++ ".rbl.efnetrbl.org.",
+    esmisc:log("Resolving ~s", [Hosttocheck]),
     case inet:getaddr(Hosttocheck, inet) of
 	{ok, {_, _, _, 4}} ->
 	    false; %% TOR
@@ -161,6 +168,14 @@ checkblacklist(lookup, IP) ->
 	{error, _} ->
 	    false %% Not listed
     end;
+checkblacklist(check, IP) ->
+    case lists:member(IP, [<<"127.0.0.1">>,
+			   <<"0">>]) of
+	true ->
+	    false;
+	_false ->
+	    checkblacklist(lookup, IP)
+    end;
 checkblacklist(DB, IP) ->
     Curtime = esmisc:curtime(),
     case ets:lookup(DB, IP) of
@@ -168,7 +183,7 @@ checkblacklist(DB, IP) ->
 	    esmisc:log("HIT for IP ~p", [IP]),
 	    Entry#blacklistentry.result;
 	_Else ->
-	    Result = checkblacklist(lookup, IP),
+	    Result = checkblacklist(check, IP),
 	    Entry = #blacklistentry{
 	      ip=IP,
 	      expirytime=Curtime + 3600 * 24,
