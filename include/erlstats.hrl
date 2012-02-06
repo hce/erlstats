@@ -42,14 +42,14 @@
 		    handledcommands}).
 		  
 
--record(ircuid,	{server,
-		 nick,
-		 hops,
-		 ts,
-		 modes,
-		 hostname,
-		 ip,
-		 uid,
-		 gecos}).
+-record(irccmduid,	{server,
+			 nick,
+			 hops,
+			 ts,
+			 modes,
+			 hostname,
+			 ip,
+			 uid,
+			 gecos}).
 		 
 

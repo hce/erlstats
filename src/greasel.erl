@@ -9,6 +9,8 @@
 
 -behaviour(gen_server).
 
+-include("erlstats.hrl").
+
 %% API
 -export([start_link/0]).
 
@@ -76,6 +78,7 @@ handle_cast(initialize, State) ->
     {noreply, State};
 
 handle_cast({irccmd, uid, Params}, State) ->
+    error_logger:info_msg("aeoe: New user - need to check host ~p", [Params#irccmduid.ip]),
     {noreply, State};
 
 handle_cast(_Msg, State) ->

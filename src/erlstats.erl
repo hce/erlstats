@@ -267,14 +267,14 @@ irccmd(ping, State, [], [Pongparam]) ->
 irccmd(uid, State, SID, [Nick, Hops, TS,
 			 Usermode, Ident, Hostname,
 			 Ipaddr, UID, Gecos]) ->
-    TS = list_to_integer(binary_to_list(TS)),
+    TS_I = list_to_integer(binary_to_list(TS)),
     Parsedmodes = esmisc:parseumode(Usermode),
     User = #ircuser{
       uid=UID,
       sid=SID,
       nick=Nick,
       hop=Hops,
-      ts=TS,
+      ts=TS_I,
       modes=Parsedmodes,
       ident=Ident,
       host=Hostname,
@@ -289,11 +289,11 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
 
     ?DEBUG("New user: ~p", [User]),
 
-    Pluginparams = #ircuid{
+    Pluginparams = #irccmduid{
       server=SID,
       nick=Nick,
       hops=Hops,
-      ts=TS,
+      ts=TS_I,
       modes=Parsedmodes,
       hostname=Hostname,
       ip=Ipaddr,
@@ -415,7 +415,12 @@ updateplugin([], _PID, _Updated_Plugin) ->
     [].
 
 plugincommand(#state{plugins=P}, Command, Params) ->
+    %% Get a list of all plugins that have requested to
+    %% be called back for that message
+    Handlingplugins = [Plugin || Plugin <- P,
+				 lists:member(Command, Plugin#ircplugin.handledcommands)],
+
+    %% Cast the message to all appropriate plugins
     lists:foreach(fun(#ircplugin{pid=PID}) ->
 			  gen_server:cast(PID, {irccmd, Command, Params})
-		  end, [Plugin || Plugin <- P,
-				  lists:member(Command, Plugin#ircplugin.handledcommands)]).
+		  end, Handlingplugins).
