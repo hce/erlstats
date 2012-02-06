@@ -440,8 +440,36 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 			  [User#ircuser.nick, Newmodes, Resultingmodes]),
     State;
 
-%ircmode(sjoin, State, _Introducer, [TS, Name, Modes, UserUIDs]) ->
-%    Channel = 
+irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
+    {Modes, [UserUIDs]} = lists:split(length(ModesAndUserUIDs) - 1,
+				      ModesAndUserUIDs),
+    Users = lists:foldl(fun(<< UT:8, UN/binary >>=FullName, A) ->
+				[case UT of
+				     $@ ->
+					 #ircchanuser{uid=UN, privs=op};
+				     $% ->
+					 #ircchanuser{uid=UN, privs=halfop};
+				     $+ ->
+					 #ircchanuser{uid=UN, privs=voice};
+				     _Else ->
+					 #ircchanuser{uid=FullName, privs=undefined}
+				 end|A]
+			end, [], binary:split(UserUIDs, <<" ">>, [global])),
+    Channel = #ircchannel{
+      channame=Name,
+      bans=[],
+      banexps=[],
+      invexps=[],
+      chankey=undefined,
+      modes=[],
+      users=Users,
+      topic=[],
+      ts=list_to_integer(binary_to_list(TS))
+     },
+    Channel_U = esmisc:parsecmode(Channel, Modes),
+    ets:insert(State#state.channeltable, Channel_U),
+    ?DEBUG("New channel: ~p", [Channel_U]),
+    State;
 
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),

@@ -27,9 +27,15 @@
 		     banexps,
 		     invexps,
 		     chankey,
+		     chanlimit,
 		     modes,
 		     users,
-		     topic}).
+		     topic,
+		     ts}).
+
+-record(ircchanuser, {uid, privs}).
+
+-record(ircchanmodeparam, {setter, ts, param}).
 
 -record(ircserver, {sid,
 		    hostname,
