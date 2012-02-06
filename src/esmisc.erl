@@ -19,7 +19,7 @@
 
 %% Spawn functions
 -export([
-	 logger/1
+	 logger/2
 	]).
 
 %%====================================================================
@@ -63,8 +63,7 @@ openlog() ->
     %%Logpath = code:priv_dir(erlstats),
     Logpath = "priv",
     Logfile = filename:join(Logpath, "erlstats.log"),
-    {ok, F} = file:open(Logfile, [write]),
-    LP = spawn(?MODULE, logger, [F]),
+    LP = spawn(?MODULE, logger, [init, Logfile]),
     register(logger, LP).
 
 log(S) ->
@@ -74,11 +73,15 @@ log(S, F) ->
     R = io_lib:format(S, F),
     logger ! {log, R}.
 
+logger(init, Logfile) ->
+    {ok, F} = file:open(Logfile, [write]),
+    logger(F).
+
 logger(F) ->
     receive
 	{log, Stuff} ->
-	    file:write(F, Stuff),
-	    file:write(F, << "\n" >>),
+	    ok = file:write(F, Stuff),
+	    ok = file:write(F, << "\n" >>),
 	    logger(F);
 	Else ->
 	    error_logger:info_msg("Unknown log message ~p!", [Else])

@@ -38,5 +38,18 @@
 		    uplink}).
 
 -record(ircplugin, {pid,
-		    users}).
+		    users,
+		    handledcommands}).
 		  
+
+-record(ircuid,	{server,
+		 nick,
+		 hops,
+		 ts,
+		 modes,
+		 hostname,
+		 ip,
+		 uid,
+		 gecos}).
+		 
+

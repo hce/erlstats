@@ -104,13 +104,14 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-handle_call(register_plugin, {PID, _Tag}, State) ->
+handle_call({register_plugin, Handledcommands}, {PID, _Tag}, State) ->
     Plugins = State#state.plugins,
     PPI = State#state.pending_plugin_inits,
 
     Plugin = #ircplugin{
       pid=PID,
-      users=[]
+      users=[],
+      handledcommands=Handledcommands
      },
     Plugins_U = [Plugin|Plugins],
 
@@ -266,13 +267,15 @@ irccmd(ping, State, [], [Pongparam]) ->
 irccmd(uid, State, SID, [Nick, Hops, TS,
 			 Usermode, Ident, Hostname,
 			 Ipaddr, UID, Gecos]) ->
+    TS = list_to_integer(binary_to_list(TS)),
+    Parsedmodes = esmisc:parseumode(Usermode),
     User = #ircuser{
       uid=UID,
       sid=SID,
       nick=Nick,
       hop=Hops,
       ts=TS,
-      modes=esmisc:parseumode(Usermode),
+      modes=Parsedmodes,
       ident=Ident,
       host=Hostname,
       ip=Ipaddr,
@@ -285,6 +288,20 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
     ets:insert(State#state.usertable, User),
 
     ?DEBUG("New user: ~p", [User]),
+
+    Pluginparams = #ircuid{
+      server=SID,
+      nick=Nick,
+      hops=Hops,
+      ts=TS,
+      modes=Parsedmodes,
+      hostname=Hostname,
+      ip=Ipaddr,
+      uid=UID,
+      gecos=Gecos
+     },
+
+    plugincommand(State, uid, Pluginparams),
     
     State;
 
@@ -396,3 +413,9 @@ updateplugin([P|R], PID, Updated_Plugin) ->
      end|updateplugin(R, PID, Updated_Plugin)];
 updateplugin([], _PID, _Updated_Plugin) ->
     [].
+
+plugincommand(#state{plugins=P}, Command, Params) ->
+    lists:foreach(fun(#ircplugin{pid=PID}) ->
+			  gen_server:cast(PID, {irccmd, Command, Params})
+		  end, [Plugin || Plugin <- P,
+				  lists:member(Command, Plugin#ircplugin.handledcommands)]).

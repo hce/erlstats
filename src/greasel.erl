@@ -40,7 +40,10 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-    gen_server:call(erlstats, register_plugin),
+    Handledcommands = [
+		       uid  % We need to keep track of all users connecting to the server
+		      ],
+    gen_server:call(erlstats, {register_plugin, Handledcommands}),
     {ok, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -70,6 +73,9 @@ handle_cast(initialize, State) ->
 			       << "greasellab.oceanlab.research.hackint.org" >>,
 			       << "HackINT's Security Greasel" >>,
 			       << "IRC Security Greasel" >>}),
+    {noreply, State};
+
+handle_cast({irccmd, uid, Params}, State) ->
     {noreply, State};
 
 handle_cast(_Msg, State) ->
