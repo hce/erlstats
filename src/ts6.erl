@@ -16,7 +16,8 @@
 	 sts_newuser/2,
 	 sts_kill/5,
 	 sts_kline/5,
-	 sts_cmode/5
+	 sts_cmode/5,
+	 sts_notice/4
 	]).
 
 %%====================================================================
@@ -97,6 +98,13 @@ sts_cmode(S, Modesetter, Channel, TS, Modes) ->
 		   ":", Modesetter/binary, " TMODE ",
 		   TS_B/binary, " ", Channel/binary, " ",
 		   Modes_F/binary, 10
+		 >>).
+
+sts_notice(S, Noticer, Noticee, Notice) ->
+    gen_tcp:send(S,
+		 <<
+		   ":", Noticer/binary, " NOTICE ",
+		   Noticee/binary, " :", Notice/binary, 10
 		 >>).
 		   
 

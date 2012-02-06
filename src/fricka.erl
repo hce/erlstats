@@ -82,10 +82,18 @@ handle_cast({irccmd, tmode, Params}, State) ->
     Channame = Params#irccmdtmode.channame,
     [Modes|Modeparams] = Params#irccmdtmode.modechanges,
     Nicks_to_unhalfop = find_nicks_to_unhalfop(Channame, Modes, Modeparams),
-    error_logger:info_msg("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]),
     Modechars = list_to_binary(["h" || _X <- Nicks_to_unhalfop]),
     erlstats:irc_cmode(server, Channame, [<< "-", Modechars/binary >>|
 					  Nicks_to_unhalfop]),
+    if
+	Nicks_to_unhalfop =/= [] ->
+	    erlstats:irc_notice((State#state.frickauser)#ircuser.uid,
+				Params#irccmdtmode.issuer,
+				<< "HackINT does not support HalfOP. Please do not use them. ChanServ offers a very granular permission system, see /msg chanserv help flags  for details or ask in #hackint" >>),
+	    error_logger:info_msg("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]);
+	true ->
+	    ok
+    end,
     {noreply, State};  
 handle_cast(_Info, State) ->
     {noreply, State}.

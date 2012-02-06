@@ -18,7 +18,8 @@
 -export([
 	 irc_kill/3,
 	 irc_kline/3,
-	 irc_cmode/3
+	 irc_cmode/3,
+	 irc_notice/3
 	]).
 
 %% gen_server callbacks
@@ -202,6 +203,11 @@ handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
     ets:insert(State#state.channeltable, Channel_U),
     {reply, ok, State};
 
+handle_call({irc_notice, Noticer, Noticee, Notice}, _From, State) ->
+    ts6:sts_notice(State#state.socket,
+		   Noticer, Noticee, Notice),
+    {reply, ok, State};
+
 handle_call(getusertable, _From, State) ->
     {reply, {ok, State#state.usertable}, State};
 
@@ -266,6 +272,9 @@ irc_kline(Host, Timeout, Reason) ->
 
 irc_cmode(Modesetter, Channel, Modes) ->
     gen_server:call(erlstats, {irc_cmode, Modesetter, Channel, Modes}).
+
+irc_notice(Noticer, Noticee, Notice) ->
+    gen_server:call(erlstats, {irc_notice, Noticer, Noticee, Notice}).
 
 
 %%--------------------------------------------------------------------
