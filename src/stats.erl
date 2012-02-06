@@ -152,7 +152,10 @@ handle_stats(Usertable,
     
 
     file:close(F_config),
-    file:close(F_stats).
+    file:close(F_stats),
+    
+    file:rename("priv/ircstats.conf_new", "priv/ircstats.conf"),
+    file:rename("priv/ircstats.data_new", "priv/ircstats.data").
 
 
 hashit(N) ->
