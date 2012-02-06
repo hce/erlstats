@@ -259,6 +259,29 @@ irccmd(server, State, [], [ServerHostname, Hops, ServerDescription]) ->
 irccmd(svinfo, State, [], _Parameters) ->
     State;
 
+irccmd(nick, State, NickChanger, [Newnick, TS]) ->
+    User = resolveuser(State, NickChanger),
+    error_logger:info_msg("~p (~p) is changing their nick to ~p at ~p",
+			  [User#ircuser.nick, NickChanger,
+			   Newnick, TS]),
+    User_Updated = User#ircuser{
+		     nick=Newnick,
+		     ts=TS
+		    },
+    ets:insert(State#state.usertable, User_Updated),
+    State;
+
+irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
+    User = resolveuser(State, Changee),
+    Resultingmodes = esmisc:parseumode(User#ircuser.modes, Newmodes),
+    User_Updated = User#ircuser{
+		     modes=Resultingmodes
+		    },
+    ets:insert(State#state.usertable, User_Updated),
+    error_logger:info_msg("Mode change for user ~p: ~p => ~p",
+			  [User#ircuser.nick, Newmodes, Resultingmodes]),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     error_logger:info_msg("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
