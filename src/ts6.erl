@@ -17,7 +17,8 @@
 	 sts_kill/5,
 	 sts_kline/5,
 	 sts_cmode/5,
-	 sts_notice/4
+	 sts_notice/4,
+	 sts_quituser/3
 	]).
 
 %%====================================================================
