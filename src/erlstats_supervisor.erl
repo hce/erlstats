@@ -54,34 +54,15 @@ init([]) ->
 			    ]
 		},
 	      permanent,2000,worker,['erlstats']},
-
-    Greasel = {'Greasel',
-	       {'greasel',
+    
+    Plugins = {'Plugins',
+	       {'erlstats_plugins_supervisor',
 		start_link,[
 			   ]
 	       },
-	      permanent,2000,worker,['greasel']},
-    Fricka = {'Fricka',
-	      {'fricka',
-	       start_link, [
-			   ]
-	      },
-	      permanent,2000,worker,['fricka']},
-    Stats = {'Stats',
-	     {'stats',
-	      start_link, [
-			  ]
-	      },
-	     permanent,2000,worker,['stats']},
-    
+	       permanent,2000,worker,['erlstats_plugins_supervisor']},
 
-    Plugins = [
-	       Greasel,
-	       Fricka,
-	       Stats
-	      ],
-
-    {ok,{{one_for_all,0,1}, [Erlstats|Plugins]}}.
+    {ok,{{one_for_all,0,1}, [Erlstats, Plugins]}}.
 
 %%====================================================================
 %% Internal functions
