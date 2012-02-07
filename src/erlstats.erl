@@ -121,6 +121,8 @@ handle_call({register_plugin, Handledcommands}, {PID, _Tag}, State) ->
       users=[],
       handledcommands=Handledcommands
      },
+    link(PID),                   %% Link to the plugin process so that we notice if it crashes.
+                                 %% And also so that it crashes if we crash (which god forbid)
     Plugins_U = [Plugin|Plugins],
 
     %% If we are already initialised,
@@ -252,8 +254,20 @@ handle_info({tcp, _Socket, Data}, State) ->
     {noreply, Newstate};
 
 handle_info({'EXIT', FromPid, Reason}, State) ->
-    error_logger:info_msg("~p has died for reason ~p.", [FromPid, Reason]),
-    {noreply, State};
+    ?DEBUG("~p has died for reason ~p.", [FromPid, Reason]),
+    State1 = case findplugin(State, FromPid) of
+		 #ircplugin{users=Users}=Plugin ->
+		     Delres = deleteplugin(State, FromPid),
+		     ?DEBUG("~p was a registered plugin with ~p user(s); removing it",
+			    [FromPid, length(Users)]),
+		     remove_plugin_users(State, FromPid, Plugin,
+					 "Plugin's gen_server process died"),
+		     Delres;
+		 noplugin ->
+		     ?DEBUG("~p was not a registered plugin", [FromPid]),
+		     State
+	     end,
+    {noreply, State1};
 
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -540,7 +554,10 @@ findplugin(#state{plugins=P}, PID) ->
 findplugin([#ircplugin{pid=PID}=Plugin|_R], PID) ->
     Plugin;
 findplugin([_P|R], PID) ->
-    findplugin(R, PID).
+    findplugin(R, PID);
+findplugin([], _PID) ->
+    noplugin.
+
 
 updateplugin(#state{plugins=P}, #ircplugin{pid=PID}=Updated_Plugin) ->
     updateplugin(P, PID, Updated_Plugin).
@@ -554,6 +571,11 @@ updateplugin([P|R], PID, Updated_Plugin) ->
      end|updateplugin(R, PID, Updated_Plugin)];
 updateplugin([], _PID, _Updated_Plugin) ->
     [].
+
+deleteplugin(#state{plugins=P}=State, PID) ->
+    P_U = [Plugin || #ircplugin{pid=PluginPID}=Plugin <- P,
+		     PluginPID =/= PID],
+    State#state{plugins=P_U}.
 
 plugincommand(#state{plugins=P}, Command, Params) ->
     %% Get a list of all plugins that have requested to
@@ -749,3 +771,18 @@ find_plugin_user(search, [#ircuser{nick=Usernick}=User|_Rest], Usernick) ->
     User;
 find_plugin_user(search, [_Someuser|Rest], Usernick) ->
     find_plugin_user(search, Rest, Usernick).
+
+remove_plugin_users(State, FromPid, Plugin, Quitreason) ->
+    lists:foreach(fun(User) ->
+			  remove_plugin_user(State, FromPid, Plugin,
+					     User, Quitreason)
+		  end, Plugin#ircplugin.users).
+
+remove_plugin_user(State, FromPid, Plugin, User, Quitreason) ->
+    Newusers = [U || U <- Plugin#ircplugin.users,
+		     U =/= User],
+    ets:delete(State#state.usertable, User#ircuser.uid),
+    ts6:sts_quituser(State#state.socket, User, Quitreason),
+    ?DEBUG("Removing user ~p from plugin with pid ~p.",
+	   [User#ircuser.nick, FromPid]),
+    Plugin#ircplugin{users=Newusers}.

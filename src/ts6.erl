@@ -59,6 +59,10 @@ sts_newuser(S, Ircuser) ->
 		      ":", (Ircuser#ircuser.realname)/binary, 10
 		    >>).
 
+sts_quituser(S, Ircuser, Quitreason) ->
+    gen_tcp:send(S, [<< ":" >>, Ircuser#ircuser.uid,
+		     << " QUIT :" >>, Quitreason, 10]).
+
 sts_kill(S, Killer, Killername, Killee, Reason) ->
     gen_tcp:send(S,
 		 <<

@@ -43,7 +43,7 @@ init([]) ->
     Erlstats = {'Erlstats',
 		{'erlstats',
 		 start_link,[
-			     ["192.168.178.20",
+			     ["127.0.0.1",
 			      6667,
 			      <<"stats.hackint.org">>,
 			      <<"00F">>,
