@@ -620,24 +620,32 @@ handle_nick_privmsg(State, Messager, Nickname, Message) ->
     Message_Cmd_A = esmisc:atomorunknown(Message_Cmd_B),
 
     PID = dict:fetch(pluginpid, User#ircuser.serverdata),
+    Pluginmodule = dict:fetch(pluginmodule, User#ircuser.serverdata),
     case {Message_Cmd_A, Params} of
 	{help, [Subcommand_I|_]} ->
 	    Subcommand = esmisc:atomorunknown(Subcommand_I),
 	    handle_plugin_help(User,
 			       Messager_User,
-			       dict:fetch(pluginmodule, User#ircuser.serverdata),
+			       Pluginmodule,
 			       Nickname_Atom,
 			       Subcommand);
 	 {help, []} ->
 	    handle_plugin_help(User, Messager_User,
-			       dict:fetch(pluginmodule, User#ircuser.serverdata),
+			       Pluginmodule,
 			       Nickname_Atom);
 	_Else ->
-	    gen_server:cast(PID, {privmsg, Nickname_Atom,
-				  User,
-				  Message_Cmd_A,
-				  Messager_User,
-				  Params})
+	    case check_command_permission(Pluginmodule, Nickname_Atom,
+					  Messager_User, Message_Cmd_A) of
+		true ->
+		    gen_server:cast(PID, {privmsg, Nickname_Atom,
+					  User,
+					  Message_Cmd_A,
+					  Messager_User,
+					  Params});
+		false ->
+		    irc_notice(User#ircuser.uid, Messager,
+			       "Permission denied")
+	    end
     end,
     
     State.
@@ -694,6 +702,27 @@ handle_plugin_help(Pluginuser,
 help_format_commands(Pluginmodule, Nickname,
 		     Askermodes) ->
     [].
+
+check_command_permission(Pluginmodule, Nickname,
+			 Command_giver, Command) ->
+    try erlang:apply(Pluginmodule, cmdperm, [Nickname, Command]) of
+	Res when is_integer(Res) ->
+	    lists:member(Res, Command_giver#ircuser.modes);
+	Res when is_function(Res) ->
+	    try Res(Command_giver) of
+		Result when is_boolean(Result)->
+		    Result;
+		Else ->
+		    error_logger:info_msg("Erraneous result of permission checking function: ~p", [Else]),
+		    false
+	    catch _:_ ->
+		    false
+	    end;
+	Else2 ->
+	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2])
+    catch _:_ ->
+	    false
+    end.
 
 find_plugin_user(State, Usernick) ->
     Pluginusers =

@@ -182,7 +182,7 @@ cmdhelp(greasel, checkhost) ->
 
 %% The permissions required to use a certain command
 cmdperm(greasel, checkhost) ->
-    "o".
+    $o. %% checkhost needs operator permissions
 
 %% Generic information to be displayed when HELP
 %% is called without parameters
