@@ -130,7 +130,7 @@ handle_cast({privmsg, greasel, I, checkhost, User, [Hosttocheck]}, State) ->
 
 handle_cast({privmsg, greasel, I, iscached, User, [IPtocheck]}, State) ->
     Lookupresult = case ets:lookup(State#state.blacklistdb, IPtocheck) of
-		       [{true, Reason}] ->
+		       [#blacklistentry{result={true,Reason}}] ->
 			   [<< "The specified IP is listed with the reason: " >>, Reason];
 		       _Else ->
 			   << "The specified IP is not listed." >>
