@@ -10,6 +10,7 @@ The base erlstats package comes with two sample plugins:
 
 greasel  * Checks connecting users against a DNSBL blacklist
 fricka   * Checks for compliance with miscellaneous rules
+stats    * Generate stats every two minutes to be used with MUNIN
 
 The code in the master branch runs live and in production on the
 hackint IRC network (www.hackint.org).
