@@ -1,0 +1,14 @@
+This is erlstats, a generic TS6 irc server framework that can be used
+to implement IRC Services like ChanServ or Q or the likes. The idea is
+to implement a small and very reliable and stable core, around which
+many plugins can be implemented.
+
+Each plugin is implemented as a generic server and can but does not
+have to provide one or more users.
+
+The base erlstats package comes with two sample plugins:
+
+greasel  * Checks connecting users against a DNSBL blacklist
+fricka   * Checks for compliance of miscellaneous rules
+
+The code runs live and in production on hackint (www.hackint.org)
