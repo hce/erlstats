@@ -128,6 +128,17 @@ handle_cast({privmsg, greasel, I, checkhost, User, [Hosttocheck]}, State) ->
 
     {noreply, State};
 
+handle_cast({privmsg, greasel, I, iscached, User, [IPtocheck]}, State) ->
+    Lookupresult = case ets:lookup(State#state.blacklistdb, IPtocheck) of
+		       [{true, Reason}] ->
+			   [<< "The specified IP is listed with the reason: " >>, Reason];
+		       _Else ->
+			   << "The specified IP is not listed." >>
+		   end,
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			Lookupresult),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -167,7 +178,8 @@ code_change(_OldVsn, State, _Extra) ->
 %% A list of plugin commands accessible through IRC
 cmdlist(greasel) ->
     [
-     checkhost
+     checkhost,
+     iscached
     ].
 
 %% The help for each command accessible through IRC
@@ -175,14 +187,29 @@ cmdhelp(greasel, checkhost) ->
     [
      {params,    [<<"HOSTNAME">>]},
      {shortdesc, <<"Check if \^bHOSTNAME\^b is blacklisted">>},
-     {longdesc,  <<"The \^bCHECKHOST\^b command checks if \^bHOSTNAME\^b\n",
-		   "is blacklisted. The way this check is performed is the same\n",
+     {longdesc,  <<"The \^bCHECKHOST\^b command checks if \^bHOSTNAME\^b\n"
+		   "is blacklisted. The way this check is performed is the same\n"
 		   "as when a user connects to hackint.">>}
-     ].
+    ];
+cmdhelp(greasel, iscached) ->
+    [
+     {params,    [<<"IPv4">>]},
+     {shortdesc, [<<"Look up \^bIPv4\^b in the local DNSBL cache">>]},
+     {longdesc,  [<<"The \^bISCACHED\^b command checks if \^bIPv4\^b\n"
+		    "is in the local DNSBL cache. If it is in the cache \^band\^b\n"
+		    "if it is marked as listed, this is indicated. In all other\n"
+		    "case this command reports the entry as not cached.\n \n"
+		    "You must specify a valid IPv4 address; hostnames won't work.">>]}
+    ].
+
 
 %% The permissions required to use a certain command
 cmdperm(greasel, checkhost) ->
-    $o. %% checkhost needs operator permissions
+    $o; %% checkhost needs operator permissions
+cmdperm(greasel, iscached) ->
+    []. %% No special permissions required
+
+
 
 %% Generic information to be displayed when HELP
 %% is called without parameters

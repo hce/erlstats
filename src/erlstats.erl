@@ -714,33 +714,66 @@ handle_plugin_help(Pluginuser,
 		   Nickname) ->
     AskerUID = Askeruser#ircuser.uid,
     Nickname_U = string:to_upper(atom_to_list(Nickname)),
-    try {erlang:apply(Pluginmodule, cmdgenericinfo, [Nickname]),
-	 erlang:apply(Pluginmodule, cmdlist, [Nickname])} of
-	{Desc, Cmdlist} ->
+    try erlang:apply(Pluginmodule, cmdgenericinfo, [Nickname]) of
+	Desc ->
+	    Commands = case help_format_commands(Pluginmodule, Nickname,
+						 Askeruser) of
+			   [] -> "";
+			   List ->
+			       ["\n \nThe following commands are available:\n", List]
+		       end,
 	    MSG = ["***** \^b", Nickname_U, " Help\^b *****\n",
 		   Desc,
-		   "\n \nThe following commands are available:\n",
-		   help_format_commands(Pluginmodule, Nickname,
-					Askeruser#ircuser.modes),
-		  "\n***** \^bEnd of Help\^b *****"],
+		   Commands,
+		   "\n***** \^bEnd of Help\^b *****"],
 	    irc_notice(Pluginuser#ircuser.uid,
 		       AskerUID,
-		       MSG);
-	Else ->
-	    error_logger:info_msg("Erraneous command help ~p", [Else])
+		       MSG)
     catch _:_ ->
 	    irc_notice(Pluginuser#ircuser.uid,
 		       AskerUID,
 		       "No generic help available for this plugin - REPORT THIS AS A BUG!")
     end.
 
-help_format_commands(Pluginmodule, Nickname,
-		     Askermodes) ->
-    [].
+help_format_commands(Pluginmodule, Nickname, Asker) ->
+    try help_format_commands(unsafe, Pluginmodule,
+			     Nickname, Asker) of
+	Result when is_list(Result) ->
+	    Result;
+	_Else ->
+	    []
+    catch _:_ ->
+	    []
+    end.
+
+help_format_commands(unsafe, Pluginmodule,
+		     Nickname, Asker) ->
+    List = erlang:apply(Pluginmodule, cmdlist, [Nickname]),
+    lists:foldl(
+      fun(Cmd_A, Acc) ->
+	      case check_command_permission(Pluginmodule, Nickname,
+					    Asker, Cmd_A) of
+		  true ->
+		      Cmd_P = erlang:apply(Pluginmodule, cmdhelp, [Nickname, Cmd_A]),
+		      {shortdesc, Cmd_D} = lists:keyfind(shortdesc, 1, Cmd_P),
+		      Cmd_U = string:to_upper(atom_to_list(Cmd_A)),
+		      Formatted = io_lib:format("\^b~-15s\^b ~s", [Cmd_U, Cmd_D]),
+		      if Acc =:= [] ->
+			      [Formatted];
+			 true ->
+			      [Formatted,10|Acc]
+		      end;
+		  false ->
+		      Acc
+	      end
+      end, [], List).
+
 
 check_command_permission(Pluginmodule, Nickname,
 			 Command_giver, Command) ->
     try erlang:apply(Pluginmodule, cmdperm, [Nickname, Command]) of
+	[] ->
+	    true;
 	Res when is_integer(Res) ->
 	    lists:member(Res, Command_giver#ircuser.modes);
 	Res when is_function(Res) ->
