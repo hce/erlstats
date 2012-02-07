@@ -42,10 +42,10 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-    Timer = timer:send_interval(120000, update_stats),
-    {ok, #state{
-      timer=Timer
-      }}.
+    Handledcommands = [
+		      ],
+    gen_server:call(erlstats, {register_plugin, Handledcommands}),
+    {ok, #state{}}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -66,6 +66,12 @@ handle_call(_Request, _From, State) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
+handle_cast(initialize, State) ->
+    Timer = timer:send_interval(120000, update_stats),
+    {noreply, State#state{
+       timer=Timer
+      }};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
