@@ -17,7 +17,8 @@
 	 openlog/0,
 	 log/1,
 	 log/2,
-	 parsecmode/2
+	 parsecmode/2,
+	 atomorunknown/1
 	]).
 
 %% Spawn functions
@@ -183,4 +184,13 @@ logger(F) ->
 	    logger(F);
 	Else ->
 	    error_logger:info_msg("Unknown log message ~p!", [Else])
+    end.
+
+atomorunknown(S) ->
+    C = string:to_lower(binary_to_list(iolist_to_binary(S))),
+    try list_to_existing_atom(C) of
+	Atom when is_atom(Atom) ->
+	    Atom
+    catch _:_ ->
+	    unknown
     end.

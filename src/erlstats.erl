@@ -241,13 +241,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     ?DEBUG("Parsing ~p", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
-		       Command_lower = string:to_lower(binary_to_list(Command)),
-		       Command_atom  = try list_to_existing_atom(Command_lower) of
-					   Someatom when is_atom(Someatom) ->
-					       Someatom
-				       catch _:_ ->
-					       unknown
-				       end,
+		       Command_atom = esmisc:atomorunknown(Command),
 						%io:format("Command ~p[~p] Inst ~p Params ~p~n", [Command_atom, Command_lower, Instigator, Params]),
 		       irccmd(Command_atom, State, Instigator, Params);
 		   Else ->
@@ -616,27 +610,18 @@ handle_channel_privmsg(State, _Messager, _ChanName, _Message) ->
 handle_nick_privmsg(State, Messager, Nickname, Message) ->
     User = find_plugin_user(State, Nickname),
     Messager_User = resolveuser(State, Messager),
-    Nickname_Atom = list_to_existing_atom(string:to_lower(binary_to_list(Nickname))),
+    Nickname_Atom = esmisc:atomorunknown(Nickname),
     ?DEBUG("Message to ~p from ~p: ~p", [Nickname_Atom,
 					 Messager_User#ircuser.nick,
 					 Message]),
 
     [Message_Cmd_B|Params] = binary:split(Message, <<" ">>, [global]),
-    Message_Cmd_A = try list_to_existing_atom(
-			  string:to_lower(
-			    binary_to_list(Message_Cmd_B))) of
-			Atom when is_atom(Atom) ->
-			    Atom
-		    catch _:_ ->
-			    unknown
-		    end,
+    Message_Cmd_A = esmisc:atomorunknown(Message_Cmd_B),
 
     PID = dict:fetch(pluginpid, User#ircuser.serverdata),
     case {Message_Cmd_A, Params} of
 	{help, [Subcommand_I|_]} ->
-	    Subcommand = list_to_existing_atom(
-			   string:to_lower(
-			     binary_to_list(Subcommand_I))),
+	    Subcommand = esmisc:atomorunknown(Subcommand_I),
 	    handle_plugin_help(User,
 			       Messager_User,
 			       dict:fetch(pluginmodule, User#ircuser.serverdata),

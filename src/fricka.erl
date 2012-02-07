@@ -18,6 +18,10 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
+%% Plugin command information
+-export([cmdlist/1, cmdhelp/2,
+	 cmdperm/2, cmdgenericinfo/1]).
+
 -record(state, {
 	 frickauser    %% Out IRC "nick" fricka
 	 }).
@@ -96,21 +100,7 @@ handle_cast({irccmd, tmode, Params}, State) ->
     end,
     {noreply, State};
 
-handle_cast({privmsg, fricka, I, help, User, []}, State) ->
-    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-			<<
-			  "***** ", 2, "Fricka Help", 2, " *****", 10,
-			  2, "Fricka", 2, " heiß' ich, und ", 2, "Fricka", 2, " bin ich!", 10, 32, 10,
-			  2, "Fricka", 2, " is a utility bot that can perform various services.", 10,
-			  "For example, it prevents people from acquiring halfop status", 10,
-			  "in channels, as halfops are still supported by some hackint", 10,
-			  "servers, but the network as a whole does not support them", 10,
-			  "anymore.", 10, 32, 10,
-			  "No further information is available ATM, but more", 10,
-			  "is to come.", 10,
-			  "***** ", 2, "End of Help", 2, " *****"
-			>>),
-    {noreply, State};
+%handle_cast({privmsg, fricka, I, help, User, []}, State) ->
 
 handle_cast(_Info, State) ->
     {noreply, State}.
@@ -140,6 +130,29 @@ terminate(_Reason, _State) ->
 %%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+cmdlist(fricka) ->
+    [
+    ].
+
+cmdhelp(fricka, foo) ->
+    << >>.
+
+cmdperm(fricka, foo) ->
+    "".
+
+cmdgenericinfo(fricka) ->
+    <<
+      "\^bFricka\^b heiß' ich, und \^bFricka\^b bin ich!\n \n"
+      "\^bFricka\^b is a utility bot that can perform various services.\n"
+      "For example, it prevents people from acquiring halfop status\n"
+      "in channels, as halfops are still supported by some hackint\n"
+      "servers, but the network as a whole does not support them\n"
+      "anymore.\n \n"
+      "No further information is available ATM, but more\n"
+      "is to come."
+    >>.
+
 
 %%--------------------------------------------------------------------
 %%% Internal functions
