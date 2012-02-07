@@ -176,5 +176,5 @@ find_nicks_to_unhalfop(Channel, << Modechange:8, R/binary >>, [Param|Rest]=Param
 			end,
             find_nicks_to_unhalfop(Channel, R, NewParams, Addrem)
     end;
-find_nicks_to_unhalfop(_Channel, _Modechanges, [], _Addrem) ->
+find_nicks_to_unhalfop(_Channel, _Modechanges, _Shouldbeempty, _Addrem) ->
     [].

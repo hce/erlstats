@@ -502,9 +502,10 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     [Channel] = ets:lookup(State#state.channeltable, Channame),
+    ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel]),
     Channel_U = esmisc:parsecmode(Channel, Modestring),
     ets:insert(State#state.channeltable, Channel_U),
-    ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
+    ?DEBUG("Updated channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
 
     PluginParams = #irccmdtmode{
       issuer=Issuer,

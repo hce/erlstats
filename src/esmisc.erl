@@ -62,7 +62,7 @@ parsecmode(Channel, Modes) ->
     [Modechars|Modeparams] = Modes, %binary:split(Modes, <<" ">>, [global]),
     parsecmode(add, Channel, Modechars, Modeparams).
 
-parsecmode(_Operation, Channel, << >>, []) ->
+parsecmode(_Operation, Channel, << >>, _Shouldbeempty) ->
     Channel;
 
 parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
