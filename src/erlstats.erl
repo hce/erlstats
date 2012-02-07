@@ -653,6 +653,19 @@ handle_nick_privmsg(State, Messager, Nickname, Message) ->
 handle_plugin_help(Pluginuser,
 		   Askeruser, Pluginmodule,
 		   Nickname, Command) ->
+    case check_command_permission(Pluginmodule, Nickname,
+				  Askeruser, Command) of
+	true ->
+	    handle_plugin_help(checked, Pluginuser, Askeruser,
+			       Pluginmodule, Nickname, Command);
+	false ->
+	    irc_notice(Pluginuser#ircuser.uid, Askeruser#ircuser.uid,
+		       io_lib:format("No help available for ~p.", [Command]))
+    end.
+
+handle_plugin_help(checked, Pluginuser,
+		   Askeruser, Pluginmodule,
+		   Nickname, Command) ->
     AskerUID = Askeruser#ircuser.uid,
     Nickname_U = string:to_upper(atom_to_list(Nickname)),
     Command_U  = string:to_upper(atom_to_list(Command)),
