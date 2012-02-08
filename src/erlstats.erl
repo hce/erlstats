@@ -540,6 +540,27 @@ irccmd(privmsg, State, Messager, [<< ChanType:8, ChanName/binary >>=Target, Mess
 	    handle_nick_privmsg(State, Messager, Target, Message)
     end;
 
+irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
+    S = State#state.socket,
+    ME = State#state.me,
+    Hostname = ME#ircserver.hostname,
+    case find_plugin_user(State, Inquirednick) of
+	user_not_found ->
+	    ts6:sts_whoisnotfound(S, Hostname, Inquirer,
+				  Inquirednick, "Not on this server");
+	User ->
+	    ts6:sts_whoisuser(S, Hostname, Inquirer,
+			      Inquirednick, User#ircuser.ident,
+			      User#ircuser.host, User#ircuser.realname),
+	    ts6:sts_whoisserver(S, Hostname, Inquirer,
+				Inquirednick, Hostname, ME#ircserver.description),
+	    ts6:sts_whoisopinfo(S, Hostname, Inquirer,
+				Inquirednick,
+				dict:fetch(description, User#ircuser.serverdata))
+    end,
+    ts6:sts_whoisfinished(S, Hostname, Inquirer, Inquirednick),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
@@ -803,7 +824,9 @@ find_plugin_user(State, Usernick) ->
 find_plugin_user(search, [#ircuser{nick=Usernick}=User|_Rest], Usernick) ->
     User;
 find_plugin_user(search, [_Someuser|Rest], Usernick) ->
-    find_plugin_user(search, Rest, Usernick).
+    find_plugin_user(search, Rest, Usernick);
+find_plugin_user(search, [], _Usernick) ->
+    user_not_found.
 
 remove_plugin_users(State, FromPid, Plugin, Quitreason) ->
     lists:foreach(fun(User) ->

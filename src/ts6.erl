@@ -18,7 +18,13 @@
 	 sts_kline/5,
 	 sts_cmode/5,
 	 sts_notice/4,
-	 sts_quituser/3
+	 sts_quituser/3,
+	 sts_whoisuser/7,
+	 sts_whoisserver/6,
+	 sts_whoisopinfo/5,
+	 sts_whoisaddconninfo/6,
+	 sts_whoisfinished/4,
+	 sts_whoisnotfound/5
 	]).
 
 %%====================================================================
@@ -116,6 +122,37 @@ sts_notice(brokenup, S, Noticer, Noticee, Notice) ->
 		 [":", Noticer, " NOTICE ",
 		  Noticee, " :", Notice, 10
 		 ]).
+
+sts_whoisuser(S, Nodename, Askernick, Nick, User, Host, Gecos) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 311 ~s ~s ~s ~s * :~s~n",
+			       [Nodename, Askernick, Nick, User, Host, Gecos])).
+
+sts_whoisserver(S, Nodename, Askernick, Nick, Server, Serverinfo) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 312 ~s ~s ~s :~s~n",
+			       [Nodename, Askernick, Nick, Server, Serverinfo])).
+
+sts_whoisopinfo(S, Nodename, Askernick, Nick, Opinfo) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 313 ~s ~s :~s~n",
+			       [Nodename, Askernick, Nick, Opinfo])).
+
+sts_whoisaddconninfo(S, Nodename, Askernick, Nick, IP, Comment) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 338 ~s ~s ~s :~s~n",
+			       [Nodename, Askernick, Nick, IP, Comment])).
+    
+sts_whoisfinished(S, Nodename, Askernick, Nick) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 318 ~s ~s :End of /WHOIS list.~n",
+			       [Nodename, Askernick, Nick])).
+    
+sts_whoisnotfound(S, Nodename, Askernick, Nick, Reason) ->
+    gen_tcp:send(S,
+		 io_lib:format(":~s 401 ~s ~s :~s~n",
+			       [Nodename, Askernick, Nick, Reason])).
+    
 		   
 
 %%====================================================================
