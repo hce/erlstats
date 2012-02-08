@@ -145,7 +145,10 @@ parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
 	    List = Channel#ircchannel.invexps,
 	    List_U = List -- [Param],
 	    CU = Channel#ircchannel{invexps=List_U},
-	    parsecmode(Operation, CU, MRest, PRest)
+	    parsecmode(Operation, CU, MRest, PRest);
+	Else ->
+	    error_logger:info_msg("Error: unknown channel mode ~p", [Else]),
+	    parsecmode(Operation, Channel, MRest, Pall)
     end.
 
 updateuser(UID, Operation, Privilege, Users) ->
