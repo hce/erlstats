@@ -155,7 +155,7 @@ cmdhelp(fricka, whoami) ->
 		     "find out if she actually is.">>}
     ].
 
-cmdperm(fricka, foo) ->
+cmdperm(fricka, whoami) ->
     []. %% No permission required
 
 cmdgenericinfo(fricka) ->
