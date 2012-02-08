@@ -562,12 +562,12 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
     State;
 
 irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
-    case find_plugin_user(State, UID) of
-	user_not_found ->
+    case ets:lookup(State#state.usertable, UID) of
+	[] ->
 	    error_logger:info_msg("Error: ~p reports ~p authenticated as ~p, "
 				  "but ~p is not in our user table!",
-				  [SourceSID, UID, Accountname]);
-	User ->
+				  [SourceSID, UID, Accountname, UID]);
+	[User] ->
 	    ?DEBUG("~p authenticats ~p as ~p",
 		   [SourceSID, UID, Accountname]),
 	    User_U = User#ircuser{authenticated={SourceSID, Accountname}},
