@@ -100,7 +100,17 @@ handle_cast({irccmd, tmode, Params}, State) ->
     end,
     {noreply, State};
 
-%handle_cast({privmsg, fricka, I, help, User, []}, State) ->
+handle_cast({privmsg, fricka, I, whoami, User, []}, State) ->
+    Msg = case User#ircuser.authenticated of
+	      Authname when is_binary(Authname) ->
+		  [<<"They are known to \^bFricka\^b as ">>,
+		   Authname, <<".">>];
+	      _Else ->
+		  <<"\^bFricka\^b does not recognize them.">>
+	  end,
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			Msg),
+    {noreply, State};
 
 handle_cast(_Info, State) ->
     {noreply, State}.
@@ -133,24 +143,30 @@ code_change(_OldVsn, State, _Extra) ->
 
 cmdlist(fricka) ->
     [
+     whoami
     ].
 
-cmdhelp(fricka, foo) ->
-    << >>.
+cmdhelp(fricka, whoami) ->
+    [
+     {params,      []},
+     {shortdesc,   <<"Check if \^bFRICKA\^b recognises you">>},
+     {longdesc,    <<"When you are identified to \^bNICKSERV\^b, \^bFRICKA\^b "
+		     "should be aware of that fact. With this command you can "
+		     "find out if she actually is.">>}
+    ].
 
 cmdperm(fricka, foo) ->
-    "".
+    []. %% No permission required
 
 cmdgenericinfo(fricka) ->
     <<
       "\^bFricka\^b heiß' ich, und \^bFricka\^b bin ich!\n \n"
-      "\^bFricka\^b is a utility bot that can perform various services.\n"
-      "For example, it prevents people from acquiring halfop status\n"
+      "\^bFricka\^b is a goddess; on hackint she contributes to the\n"
+      "network's stability.\n \n"
+      "For example, she prevents people from acquiring halfop status\n"
       "in channels, as halfops are still supported by some hackint\n"
       "servers, but the network as a whole does not support them\n"
-      "anymore.\n \n"
-      "No further information is available ATM, but more\n"
-      "is to come."
+      "anymore."
     >>.
 
 
