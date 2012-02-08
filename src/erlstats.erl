@@ -568,7 +568,7 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
 				  "but ~p is not in our user table!",
 				  [SourceSID, UID, Accountname, UID]);
 	[User] ->
-	    ?DEBUG("~p authenticats ~p as ~p",
+	    ?DEBUG("~p authenticates ~p as ~p",
 		   [SourceSID, UID, Accountname]),
 	    User_U = User#ircuser{authenticated={SourceSID, Accountname}},
 	    ets:insert(State#state.usertable, User_U)
@@ -821,6 +821,8 @@ check_command_permission(Pluginmodule, Nickname,
 	    catch _:_ ->
 		    false
 	    end;
+	authed ->
+	    is_binary(Command_giver#ircuser.authenticated);
 	Else2 ->
 	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2])
     catch _:_ ->
