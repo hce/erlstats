@@ -6,10 +6,10 @@ core, around which many plugins can be implemented.
 Each plugin is implemented as a generic server (gen_server) and can
 but does not have to provide one or more users to the IRC network.
 
-The base erlstats package comes with two sample plugins:
+The base erlstats package comes with three sample plugins:
 
 greasel  * Checks connecting users against a DNSBL blacklist
-fricka   * Checks for compliance with miscellaneous rules
+fricka   * Checks for compliance with hackint-specific rules
 stats    * Generate stats every two minutes to be used with MUNIN
 
 The code in the master branch runs live and in production on the
