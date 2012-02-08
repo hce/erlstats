@@ -102,7 +102,7 @@ handle_cast({irccmd, tmode, Params}, State) ->
 
 handle_cast({privmsg, fricka, I, whoami, User, []}, State) ->
     Msg = case User#ircuser.authenticated of
-	      Authname when is_binary(Authname) ->
+	      {_Authenticator, Authname} ->
 		  [<<"They are known to \^bFricka\^b as ">>,
 		   Authname, <<".">>];
 	      _Else ->

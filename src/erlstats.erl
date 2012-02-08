@@ -822,7 +822,7 @@ check_command_permission(Pluginmodule, Nickname,
 		    false
 	    end;
 	authed ->
-	    is_binary(Command_giver#ircuser.authenticated);
+	    is_tuple(Command_giver#ircuser.authenticated);
 	Else2 ->
 	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2])
     catch _:_ ->
