@@ -561,6 +561,20 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
     ts6:sts_whoisfinished(S, Hostname, Inquirer, Inquirednick),
     State;
 
+irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
+    case find_plugin_user(State, UID) of
+	user_not_found ->
+	    error_logger:info_msg("Error: ~p reports ~p authenticated as ~p, "
+				  "but ~p is not in our user table!",
+				  [SourceSID, UID, Accountname]);
+	User ->
+	    ?DEBUG("~p authenticats ~p as ~p",
+		   [SourceSID, UID, Accountname]),
+	    User_U = User#ircuser{authenticated={SourceSID, Accountname}},
+	    ets:insert(State#state.usertable, User_U)
+    end,
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
