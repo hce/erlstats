@@ -24,7 +24,8 @@
 	 sts_whoisopinfo/5,
 	 sts_whoisaddconninfo/6,
 	 sts_whoisfinished/4,
-	 sts_whoisnotfound/5
+	 sts_whoisnotfound/5,
+	 sts_ping/2
 	]).
 
 %%====================================================================
@@ -152,6 +153,11 @@ sts_whoisnotfound(S, Nodename, Askernick, Nick, Reason) ->
     gen_tcp:send(S,
 		 io_lib:format(":~s 401 ~s ~s :~s~n",
 			       [Nodename, Askernick, Nick, Reason])).
+
+sts_ping(S, Value) ->
+    gen_tcp:send(S,
+		 [<< "PING :" >>, Value, 10]).
+    
     
 		   
 

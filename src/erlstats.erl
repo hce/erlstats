@@ -39,7 +39,8 @@
 	  uplinkuid,
 	  plugins,
 	  initialized,
-	  pending_plugin_inits
+	  pending_plugin_inits,
+	  burst
 	 }).
 
 -define(SERVER, ?MODULE).
@@ -100,7 +101,8 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
        remotepassword=Remotepassword,
        plugins=[],
        initialized=false,
-       pending_plugin_inits=[]
+       pending_plugin_inits=[],
+       burst=true
       }}.
 
 %%--------------------------------------------------------------------
@@ -333,6 +335,16 @@ irccmd(ping, State, [], [Pongparam]) ->
     ts6:sts_pong(State#state.socket, Pongparam),
     State;
 
+irccmd(pong, State, _Someone, _Someparams) ->
+    ?DEBUG("~p replied to our PING: ~p", [_Someone, _Someparams]),
+    if
+	State#state.burst ->
+	    error_logger:info_msg("Synchronized with network."),
+	    State#state{burst=false};
+	true ->
+	    State
+    end;
+    
 irccmd(uid, State, SID, [Nick, Hops, TS,
 			 Usermode, Ident, Hostname,
 			 Ipaddr, UID, Gecos]) ->
@@ -368,7 +380,8 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       hostname=Hostname,
       ip=Ipaddr,
       uid=UID,
-      gecos=Gecos
+      gecos=Gecos,
+      burst=State#state.burst
      },
 
     plugincommand(State, uid, Pluginparams),
@@ -393,7 +406,8 @@ irccmd(quit, State, Quitter, [Reason]) ->
 irccmd(pass, State, [], [RemotePassword, TS, TS_Version, Uplink_UID]) ->
     if
 	State#state.remotepassword =/= RemotePassword ->
-	    error_logger:info_msg("Server ~p authenticated with the wrong password!", [Uplink_UID]);
+	    error_logger:info_msg("Server ~p authenticated with the wrong password!", [Uplink_UID]),
+	    exit(error); %% Let OTP restart us or whatever :-)
 	true ->
 	    error_logger:info_msg("Server ~p correctly authenticated with us.", [Uplink_UID])
     end,
@@ -457,6 +471,7 @@ irccmd(svinfo, State, [], _Parameters) ->
     lists:foreach(fun(PID) ->
 			  gen_server:cast(PID, initialize)
 		  end, State#state.pending_plugin_inits),
+    ts6:sts_ping(State#state.socket, (State#state.me)#ircserver.sid),
     State#state{initialized=true,
 		pending_plugin_inits=[]};
 
@@ -525,7 +540,8 @@ irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
       issuer=Issuer,
       ts=TS,
       channame=Channame,
-      modechanges=Modestring
+      modechanges=Modestring,
+      burst=State#state.burst
      },
 
     plugincommand(State, tmode, PluginParams),

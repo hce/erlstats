@@ -48,7 +48,8 @@
 		    handledcommands}).
 		  
 
--record(irccmduid,	{server,
+-record(irccmduid,	{burst,
+			 server,
 			 nick,
 			 hops,
 			 ts,
@@ -59,7 +60,8 @@
 			 uid,
 			 gecos}).
 
--record(irccmdtmode, {issuer,
+-record(irccmdtmode, {burst,
+		      issuer,
 		      ts,
 		      channame,
 		      modechanges}).
