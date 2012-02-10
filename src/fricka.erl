@@ -23,7 +23,7 @@
 	 cmdperm/2, cmdgenericinfo/1]).
 
 -record(state, {
-	 frickauser    %% Out IRC "nick" fricka
+	  frickauser    %% Out IRC "nick" fricka
 	 }).
 
 %%====================================================================
@@ -49,8 +49,9 @@ start_link() ->
 %%--------------------------------------------------------------------
 init([]) ->
     Handledcommands = [
-		      tmode  % We need to see all channel mode changes
-		     ],
+		       uid,   % We need to see who's using bad gecos'
+		       tmode  % We need to see all channel mode changes
+		      ],
     gen_server:call(erlstats, {register_plugin, Handledcommands}),
     {ok, #state{}}.
 
@@ -97,6 +98,16 @@ handle_cast({irccmd, tmode, Params}, State) ->
 	    error_logger:info_msg("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]);
 	true ->
 	    ok
+    end,
+    {noreply, State};
+handle_cast({irccmd, uid, #irccmduid{burst=false}=Params}, State) ->
+    case binary:match(Params#irccmduid.gecos, <<"http://">>) of
+	nomatch ->
+	    allok;
+	_Else ->
+	    erlstats:irc_notice((State#state.frickauser)#ircuser.uid,
+				Params#irccmduid.uid,
+				<< "Your \^breal name\^b contains a URL. This is discouraged on hackint and some hackint servers might reject your connection because of this. It is recommended you change your real name to one that does not contain a URL." >>)
     end,
     {noreply, State};
 
