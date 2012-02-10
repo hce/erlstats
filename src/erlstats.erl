@@ -393,8 +393,16 @@ irccmd(kill, State, Killer, [Killee, Reason]) ->
 			  [(resolveuser(State, Killee))#ircuser.nick,
 			   (resolveuser(State, Killer))#ircuser.nick,
 			   Reason]),
+    MYSID = (State#state.me)#ircserver.sid,
+    Lookitupfirst = ets:lookup(State#state.usertable, Killee),
     ets:delete(State#state.usertable, Killee),
-    State;
+    Newstate = case Lookitupfirst of
+		   [#ircuser{sid=MYSID}=User] ->
+		       handle_plugin_nick_kill(State, User);
+		   _Else ->
+		       State
+	       end,
+    Newstate;
 
 irccmd(quit, State, Quitter, [Reason]) ->
     ?DEBUG("User ~p quit (Reason: ~p)",
@@ -869,8 +877,19 @@ remove_plugin_users(State, FromPid, Plugin, Quitreason) ->
 remove_plugin_user(State, FromPid, Plugin, User, Quitreason) ->
     Newusers = [U || U <- Plugin#ircplugin.users,
 		     U =/= User],
-    ets:delete(State#state.usertable, User#ircuser.uid),
-    ts6:sts_quituser(State#state.socket, User, Quitreason),
-    ?DEBUG("Removing user ~p from plugin with pid ~p.",
-	   [User#ircuser.nick, FromPid]),
+    case ets:lookup(State#state.usertable, User#ircuser.uid) of
+	[_Someuser] ->
+	    ts6:sts_quituser(State#state.socket, User, Quitreason),
+	    ets:delete(State#state.usertable, User#ircuser.uid),
+	    ?DEBUG("Removing user ~p from plugin with pid ~p.",
+		   [User#ircuser.nick, FromPid]);
+	_Else ->
+	    ?DEBUG("User ~p from plugin ~p seems to be already removed",
+		   [User#ircuser.nick, FromPid])
+    end,
     Plugin#ircplugin{users=Newusers}.
+
+handle_plugin_nick_kill(State, User) ->
+    PluginPID = dict:fetch(pluginpid, User#ircuser.serverdata),
+    exit(PluginPID, irc_killed),
+    State.
