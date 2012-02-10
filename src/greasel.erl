@@ -25,8 +25,7 @@
 
 -record(state, {
 	  greaseluser,    %% Our IRC "nick" greasel
-	  blacklistdb,
-	  checkblacklist
+	  blacklistdb
 	 }).
 
 %%====================================================================
@@ -58,8 +57,7 @@ init([]) ->
     Blacklistdb = ets:new(blacklistdb, [set, protected, {keypos, 2}]),
     timer:send_after(4200, start_to_check),
     {ok, #state{
-       blacklistdb=Blacklistdb,
-       checkblacklist=false
+       blacklistdb=Blacklistdb
       }}.
 
 %%--------------------------------------------------------------------
@@ -91,18 +89,12 @@ handle_cast(initialize, State) ->
 					   << "IRC Security Greasel" >>, ?MODULE}),
     {noreply, State#state{greaseluser=User}};
 
-handle_cast({irccmd, uid, Params}, State) ->
+handle_cast({irccmd, uid, #irccmduid{burst=true}=Params}, State) ->
+    esmisc:log("New user during burst - not checking ~p", [Params#irccmduid.ip]),
+    {noreply, State};
+handle_cast({irccmd, uid, #irccmduid{burst=false}=Params}, State) ->
     esmisc:log("New user - need to check host ~p", [Params#irccmduid.ip]),
-
-    Newstate = case State#state.checkblacklist of
-		   true ->
-		       check_blacklist(State, Params);
-		   false ->
-		       esmisc:log("Not checking against blacklist yet (IP ~p)",
-				  [Params#irccmduid.ip]),
-		       State
-	       end,
-	
+    Newstate = check_blacklist(State, Params),
     {noreply, Newstate};
 
 handle_cast({privmsg, greasel, I, checkhost, User, [Hosttocheck]}, State) ->
@@ -149,9 +141,6 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
-handle_info(start_to_check, State) ->
-    error_logger:info_msg("The greasel is now sharp."),
-    {noreply, State#state{checkblacklist=true}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
