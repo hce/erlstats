@@ -25,7 +25,8 @@
 
 -record(state, {
 	  greaseluser,    %% Our IRC "nick" greasel
-	  blacklistdb
+	  blacklistdb,
+	  torlistdb
 	 }).
 
 %%====================================================================
@@ -55,9 +56,11 @@ init([]) ->
 		      ],
     gen_server:call(erlstats, {register_plugin, Handledcommands}),
     Blacklistdb = ets:new(blacklistdb, [set, protected, {keypos, 2}]),
-    timer:send_after(4200, start_to_check),
+    Torlistdb   = ets:new(blacklistdb, [set, protected, {keypos, 2}]),
+    timer:send_interval(3600 * 1000, purgeoldentries),  %% Swipe through cache once per hour
     {ok, #state{
-       blacklistdb=Blacklistdb
+       blacklistdb=Blacklistdb,
+       torlistdb=Torlistdb
       }}.
 
 %%--------------------------------------------------------------------
@@ -141,6 +144,12 @@ handle_cast(_Msg, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
+handle_info(purgeoldentries, State) ->
+    Count1 = purgeoldentries(State#state.blacklistdb),
+    error_logger:info_msg("Purged ~p entries from the blacklist DB.", [Count1]),
+    Count2 = purgeoldentries(State#state.torlistdb),
+    error_logger:info_msg("Purged ~p entries from the tor DB.", [Count2]),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -291,3 +300,18 @@ check_blacklist(State, Params) ->
 								       Params#irccmduid.gecos])
     end,
     State.
+
+purgeoldentries(ETSTable) ->
+    Curtime = esmisc:curtime(),
+    ets:foldl(fun(#blacklistentry{ip=IP,
+				  expirytime=ET},
+		  Count) ->
+		      if
+			  ET < Curtime ->
+			      ets:delete(ETSTable, IP),
+			      Count + 1;
+			  true ->
+			      Count
+		      end
+	      end, 0, ETSTable).
+		      
