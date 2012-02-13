@@ -245,13 +245,13 @@ checkblacklist(lookup, IP) ->
 	    false %% Not listed
     end;
 checkblacklist(check, IP) ->
-    case lists:member(IP, [<<"127.0.0.1">>,
-			   <<"0">>]) of
+    case is_special(IP) of
 	true ->
 	    false;
-	_false ->
+	false ->
 	    checkblacklist(lookup, IP)
     end;
+
 checkblacklist(DB, IP) ->
     Curtime = esmisc:curtime(),
     case ets:lookup(DB, IP) of
@@ -269,6 +269,49 @@ checkblacklist(DB, IP) ->
 	    esmisc:log("Added a new cache entry for IP ~p", [IP]),
 	    Result
     end.
+
+checktorlist(lookup, IP) ->
+    IP_2 = case binary:split(IP, <<".">>, [global]) of
+	       [A, B, C, D] ->
+		   [D, ".", C, ".", B, ".", A];
+	       Else ->
+		   Else
+	   end,
+    Hosttocheck = binary_to_list(iolist_to_binary(IP_2)) ++ ".tor.dnsbl.sectoor.de.",
+    esmisc:log("Resolving ~s", [Hosttocheck]),
+    case inet:getaddr(Hosttocheck, inet) of
+	{ok, {_, _, _, 1}} ->
+	    true;  %% Tor
+	{ok, _Else}->
+	    false; %% Unknown listing type
+	{error, _} ->
+	    false %% Not listed
+    end;
+checktorlist(check, IP) ->
+    case is_special(IP) of
+	true ->
+	    false;
+	false ->
+	    checktorlist(lookup, IP)
+    end;
+checktorlist(DB, IP) ->
+    Curtime = esmisc:curtime(),
+    case ets:lookup(DB, IP) of
+	[Entry] when Entry#blacklistentry.expirytime > Curtime ->
+	    esmisc:log("HIT for IP ~p", [IP]),
+	    Entry#blacklistentry.result;
+	_Else ->
+	    Result = checktorlist(check, IP),
+	    Entry = #blacklistentry{
+	      ip=IP,
+	      expirytime=Curtime + 3600 * 24 * 7,  %% 7 Days
+	      result=Result
+	     },
+	    ets:insert(DB, Entry),
+	    esmisc:log("Added a new cache entry for IP ~p", [IP]),
+	    Result
+    end.
+
 
 reason(efnetrbl, 1) -> "Open Proxy";
 reason(efnetrbl, 2) -> "spamtrap666";
@@ -299,6 +342,16 @@ check_blacklist(State, Params) ->
 								       Params#irccmduid.hostname,
 								       Params#irccmduid.gecos])
     end,
+    case checktorlist(State#state.torlistdb,
+		      Params#irccmduid.ip) of
+	true ->
+	    erlstats:irc_notice((State#state.greaseluser)#ircuser.uid,
+				Params#irccmduid.uid,
+				[<< "You are welcome to connect via tor, but this is not the recommended way of doing things. Please read \^bhttp://blog.hackint.eu/blog/display?id=19\^b" >>]);
+	false ->
+	    ok
+    end,
+
     State.
 
 purgeoldentries(ETSTable) ->
@@ -315,3 +368,11 @@ purgeoldentries(ETSTable) ->
 		      end
 	      end, 0, ETSTable).
 		      
+is_special(IP) ->
+    case lists:member(IP, [<<"127.0.0.1">>,
+			   <<"0">>]) of
+	true ->
+	    false;
+	false ->
+	    true
+    end.
