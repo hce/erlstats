@@ -20,7 +20,8 @@
 	 parsecmode/4,
 	 parsecmode/2,
 	 atomorunknown/1,
-	 parsejjusers/1
+	 parsejjusers/1,
+	 removeuser/2
 	]).
 
 %% Spawn functions
@@ -208,6 +209,10 @@ updateuser(UID, Operation, Privilege, Users) ->
 			  User#ircchanuser.privs -- [Privilege]
 		  end,
     [#ircchanuser{uid=UID, privs=Privilege_s}|Users_R].
+
+removeuser(UID, Users) ->
+    [E || #ircchanuser{uid=UID_E}=E <- Users,
+	  UID_E =/= UID].
 		 
 %%====================================================================
 %% Internal functions

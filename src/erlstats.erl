@@ -555,6 +555,21 @@ irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
     ?DEBUG("Channel JOIN: ~p", [Channel_U]),
     State;
 
+irccmd(part, State, UID, [Channelname]) ->
+    [Channel] = ets:lookup(State#state.channeltable, Channelname),
+    Channel_U = Channel#ircchannel{
+		  users=esmisc:removeuser(UID, Channel#ircchannel.users)
+		 },
+    case Channel_U#ircchannel.users of
+	[] ->
+	    ets:delete(State#state.channeltable, Channelname),
+	    ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
+	_Else ->
+	    ets:insert(State#state.channeltable, Channel_U),
+	    ?DEBUG("Channel PART: ~p", [Channel_U])
+    end,
+    State;
+
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     [Channel] = ets:lookup(State#state.channeltable, Channame),
     ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel]),
