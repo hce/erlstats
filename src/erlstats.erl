@@ -520,18 +520,19 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		    invexps=[],
 		    chankey=undefined,
 		    modes=[],
-		    users=Users,
+		    users=[],
 		    topic=[],
 		    ts=list_to_integer(binary_to_list(TS))
 		   };
 		  [A_Channel] ->
-		      A_Channel#ircchannel{
-			users=(Users ++ A_Channel#ircchannel.users)
-		       }
+		      A_Channel
 	      end,
     Channel_U = esmisc:parsecmode(Channel, list_to_integer(binary_to_list(TS)), normal, Modes),
-    ets:insert(State#state.channeltable, Channel_U),
-    ?DEBUG("Channel SJOIN: ~p", [Channel_U]),
+    Channel_U2 = Channel_U#ircchannel{
+		   users=(Channel_U#ircchannel.users ++ Users)
+		  },
+    ets:insert(State#state.channeltable, Channel_U2),
+    ?DEBUG("Channel SJOIN: ~p", [Channel_U2]),
     State;
 
 irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
