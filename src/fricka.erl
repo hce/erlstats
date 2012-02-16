@@ -129,6 +129,26 @@ handle_cast({privmsg, fricka, I, info, User, []}, State) ->
 				      [User])),
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, wallop, User, Message}, State) ->
+    {ok, Usertable} = gen_server:call(erlstats, getusertable),
+    Message_F = [binary_to_list(Word) || Word <- Message],
+    Message2 = io_lib:format("WALLOPS [~s] - ~s",
+			     [User#ircuser.nick, string:join(Message_F, " ")]),
+    C = ets:foldl(fun(Usr, Count) ->
+			  case lists:member($w, Usr#ircuser.modes) of
+			      true ->
+				  erlstats:irc_notice(I#ircuser.sid, %% SID here
+						      Usr#ircuser.uid,
+						      Message2),
+				  Count + 1;
+			      false ->
+				  Count
+			  end
+		  end, 0, Usertable),
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			io_lib:format("Message sent to ~p users.", [C])),
+    {noreply, State};
+
 handle_cast(_Info, State) ->
     {noreply, State}.
 
@@ -161,7 +181,8 @@ code_change(_OldVsn, State, _Extra) ->
 cmdlist(fricka) ->
     [
      whoami,
-     info
+     info,
+     wallop
     ].
 
 cmdhelp(fricka, whoami) ->
@@ -180,13 +201,27 @@ cmdhelp(fricka, info) ->
      {longdesc,   <<"\^bFRICKA\^b, being implemented as a network service, knows\n"
 		    "quite a bit about hackint's inhabitants. With this command you\n"
 		    "can find out what information she has on you.">>}
+    ];
+
+cmdhelp(fricka, wallop) ->
+    [
+     {params,    []},
+     {shortdesc, <<"Send a message to users with mode +w">>},
+     {longdesc,  <<"Hybrid does not support USERWALLOPs out-of-the-box,\n"
+		   "thus, this functionality is provided by \^bFricka\^b instead.\n \n"
+		   "Syntax: WALLOP text\n \n"
+		   "Examples:\n"
+		   "    /msg Fricka WALLOP Hi all, try out our new channel mode +S">>}
     ].
 
 cmdperm(fricka, whoami) ->
     []; %% No permission required
 
 cmdperm(fricka, info) ->    
-    []. %% No permission required
+    []; %% No permission required
+
+cmdperm(fricka, wallop) ->
+    $o. %% Operators only
 
 cmdgenericinfo(fricka) ->
     <<
