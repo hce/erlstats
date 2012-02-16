@@ -526,7 +526,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		   };
 		  [A_Channel] -> A_Channel
 	      end,
-    Channel_U = esmisc:parsecmode(Channel, Modes),
+    Channel_U = esmisc:parsecmode(Channel, TS, normal, Modes),
     ets:insert(State#state.channeltable, Channel_U),
     ?DEBUG("New channel: ~p", [Channel_U]),
     State;
@@ -534,7 +534,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     [Channel] = ets:lookup(State#state.channeltable, Channame),
     ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel]),
-    Channel_U = esmisc:parsecmode(Channel, Modestring),
+    Channel_U = esmisc:parsecmode(Channel, TS, simple, Modestring),
     ets:insert(State#state.channeltable, Channel_U),
     ?DEBUG("Updated channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
 

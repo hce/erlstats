@@ -17,6 +17,7 @@
 	 openlog/0,
 	 log/1,
 	 log/2,
+	 parsecmode/4,
 	 parsecmode/2,
 	 atomorunknown/1,
 	 parsejjusers/1
@@ -59,19 +60,39 @@ parseumode(Operation, Curmodes, << Modechar:8, Newmodes/binary >>) ->
 parseumode(_Operation, Curmodes, << >>) ->
     Curmodes.
 
+parsecmode(Channel, TS, TSModus, Modes) ->
+    Channel_U = case {(TS < Channel#ircchannel.ts), TSModus} of
+		    {true, normal} ->
+			Channel#ircchannel{
+			  modes=[],
+			  bans=[],
+			  banexps=[],
+			  invexps=[],
+			  chanlimit=undefined,
+			  chankey=undefined,
+			  ts=TS
+			 };
+		    {true, simple} ->
+			Channel; %% We ignore this case
+		    %% TODO: handle false cases!
+		    {false, _Whatever} ->
+			Channel %% TODO!
+		end,
+    parsecmode(Channel_U, Modes).
+
 parsecmode(Channel, Modes) ->
     [Modechars|Modeparams] = Modes, %binary:split(Modes, <<" ">>, [global]),
-    parsecmode(add, Channel, Modechars, Modeparams).
+    parsecmode_i(add, Channel, Modechars, Modeparams).
 
-parsecmode(_Operation, Channel, << >>, _Shouldbeempty) ->
+parsecmode_i(_Operation, Channel, << >>, _Shouldbeempty) ->
     Channel;
 
-parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
+parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
     case {lists:member(Modechar, "ntpsmiS"), Operation, Modechar} of
 	{_, _, $+} ->
-	    parsecmode(add, Channel, MRest, Pall);
+	    parsecmode_i(add, Channel, MRest, Pall);
 	{_, _, $-} ->
-	    parsecmode(remove, Channel, MRest, Pall);
+	    parsecmode_i(remove, Channel, MRest, Pall);
 	{true, _, _} ->
 	    Newmodes = case Operation of
 			   add ->
@@ -80,76 +101,76 @@ parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
 			       Channel#ircchannel.modes -- [Modechar]
 		       end,
 	    CU = Channel#ircchannel{modes=Newmodes},
-	    parsecmode(Operation, CU, MRest, Pall);
+	    parsecmode_i(Operation, CU, MRest, Pall);
 	{false, remove, $k} ->
 	    CU = Channel#ircchannel{chankey=undefined},
 	    [<<"*">>|PRest] = Pall,
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, add, $k} ->
 	    [Param|PRest] = Pall,
 	    CU = Channel#ircchannel{chankey=Param},	    
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, remove, $l} ->
 	    CU = Channel#ircchannel{chanlimit=0},
-	    parsecmode(Operation, CU, MRest, Pall);
+	    parsecmode_i(Operation, CU, MRest, Pall);
 	{false, add, $l} ->
 	    [Param|PRest] = Pall,
 	    CU = Channel#ircchannel{chanlimit=list_to_integer(binary_to_list(Param))},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, Operation, $v} ->
 	    [Param|PRest] = Pall,
 	    Users_U = updateuser(Param, Operation, voice, Channel#ircchannel.users),
 	    CU = Channel#ircchannel{users=Users_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, Operation, $h} ->
 	    [Param|PRest] = Pall,
 	    Users_U = updateuser(Param, Operation, halfop, Channel#ircchannel.users),
 	    CU = Channel#ircchannel{users=Users_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, Operation, $o} ->
 	    [Param|PRest] = Pall,
 	    Users_U = updateuser(Param, Operation, op, Channel#ircchannel.users),
 	    CU = Channel#ircchannel{users=Users_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, add, $b} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.bans,
 	    List_U = [Param|List],
 	    CU = Channel#ircchannel{bans=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, remove, $b} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.bans,
 	    List_U = List -- [Param],
 	    CU = Channel#ircchannel{bans=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, add, $e} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.banexps,
 	    List_U = [Param|List],
 	    CU = Channel#ircchannel{banexps=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, remove, $e} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.banexps,
 	    List_U = List -- [Param],
 	    CU = Channel#ircchannel{banexps=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, add, $I} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.invexps,
 	    List_U = [Param|List],
 	    CU = Channel#ircchannel{invexps=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	{false, remove, $I} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.invexps,
 	    List_U = List -- [Param],
 	    CU = Channel#ircchannel{invexps=List_U},
-	    parsecmode(Operation, CU, MRest, PRest);
+	    parsecmode_i(Operation, CU, MRest, PRest);
 	Else ->
 	    error_logger:info_msg("Error: unknown channel mode ~p", [Else]),
-	    parsecmode(Operation, Channel, MRest, Pall)
+	    parsecmode_i(Operation, Channel, MRest, Pall)
     end.
 
 
