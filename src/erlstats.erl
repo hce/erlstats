@@ -599,6 +599,20 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     end,
     State;
 
+irccmd(away, State, UID, [Awaymsg]) ->
+    [User] = ets:lookup(State#state.usertable, UID),
+    User_U = User#ircuser{away=Awaymsg},
+    ets:insert(State#state.usertable, User_U),
+    ?DEBUG("~s ~s is now away: ~p.", [UID, User#ircuser.nick, Awaymsg]),
+    State;
+
+irccmd(away, State, UID, []) ->
+    [User] = ets:lookup(State#state.usertable, UID),
+    User_U = User#ircuser{away=undefined},
+    ets:insert(State#state.usertable, User_U),
+    ?DEBUG("~s ~s is not away anymore.", [UID, User#ircuser.nick]),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
