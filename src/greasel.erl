@@ -348,7 +348,7 @@ check_blacklist(State, Params) ->
 	    erlstats:irc_notice((State#state.greaseluser)#ircuser.uid,
 				Params#irccmduid.uid,
 				[<< "You are welcome to connect via tor, but this is not the recommended way of doing things. Please read \^bhttp://blog.hackint.eu/blog/display?id=19\^b" >>]),
-	    esmisc:log("New user ~s!~s@~s is not connecting via tor.", [Params#irccmduid.nick,
+	    esmisc:log("New user ~s!~s@~s *is* connecting via tor.", [Params#irccmduid.nick,
 									Params#irccmduid.ident,
 									Params#irccmduid.hostname]);
 	false ->
