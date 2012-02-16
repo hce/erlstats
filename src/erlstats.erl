@@ -529,7 +529,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 			users=(Users ++ A_Channel#ircchannel.users)
 		       }
 	      end,
-    Channel_U = esmisc:parsecmode(Channel, TS, normal, Modes),
+    Channel_U = esmisc:parsecmode(Channel, list_to_integer(binary_to_list(TS)), normal, Modes),
     ets:insert(State#state.channeltable, Channel_U),
     ?DEBUG("Channel SJOIN: ~p", [Channel_U]),
     State;
