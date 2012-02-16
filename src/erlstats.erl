@@ -509,29 +509,23 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
     {Modes, [UserUIDs]} = lists:split(length(ModesAndUserUIDs) - 1,
 				      ModesAndUserUIDs),
-    Users = lists:foldl(fun(<< UT:8, UN/binary >>=FullName, A) ->
-				[case UT of
-				     $@ ->
-					 #ircchanuser{uid=UN, privs=op};
-				     $% ->
-					 #ircchanuser{uid=UN, privs=halfop};
-				     $+ ->
-					 #ircchanuser{uid=UN, privs=voice};
-				     _Else ->
-					 #ircchanuser{uid=FullName, privs=undefined}
-				 end|A]
-			end, [], binary:split(UserUIDs, <<" ">>, [global])),
-    Channel = #ircchannel{
-      channame=Name,
-      bans=[],
-      banexps=[],
-      invexps=[],
-      chankey=undefined,
-      modes=[],
-      users=Users,
-      topic=[],
-      ts=list_to_integer(binary_to_list(TS))
-     },
+
+    Users = esmisc:parsejjusers(UserUIDs),
+
+    Channel = case ets:lookup(State#state.channeltable, Name) of
+		  [] -> #ircchannel{
+		    channame=Name,
+		    bans=[],
+		    banexps=[],
+		    invexps=[],
+		    chankey=undefined,
+		    modes=[],
+		    users=Users,
+		    topic=[],
+		    ts=list_to_integer(binary_to_list(TS))
+		   };
+		  [A_Channel] -> A_Channel
+	      end,
     Channel_U = esmisc:parsecmode(Channel, Modes),
     ets:insert(State#state.channeltable, Channel_U),
     ?DEBUG("New channel: ~p", [Channel_U]),
@@ -600,17 +594,25 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     State;
 
 irccmd(away, State, UID, [Awaymsg]) ->
-    [User] = ets:lookup(State#state.usertable, UID),
-    User_U = User#ircuser{away=Awaymsg},
-    ets:insert(State#state.usertable, User_U),
-    ?DEBUG("~s ~s is now away: ~p.", [UID, User#ircuser.nick, Awaymsg]),
+    case ets:lookup(State#state.usertable, UID) of
+	[User] ->
+	    User_U = User#ircuser{away=Awaymsg},
+	    ets:insert(State#state.usertable, User_U),
+	    ?DEBUG("~s ~s is now away: ~p.", [UID, User#ircuser.nick, Awaymsg]);
+	[] ->
+	    ?DEBUG("UID ~s does not exist!", [UID])
+    end,
     State;
 
 irccmd(away, State, UID, []) ->
-    [User] = ets:lookup(State#state.usertable, UID),
-    User_U = User#ircuser{away=undefined},
-    ets:insert(State#state.usertable, User_U),
-    ?DEBUG("~s ~s is not away anymore.", [UID, User#ircuser.nick]),
+    case ets:lookup(State#state.usertable, UID) of
+	[User] ->
+	    User_U = User#ircuser{away=undefined},
+	    ets:insert(State#state.usertable, User_U),
+	    ?DEBUG("~s ~s is not away anymore.", [UID, User#ircuser.nick]);
+	[] ->
+	    ?DEBUG("UID ~s does not exist!", [UID])
+    end,
     State;
 
 irccmd(Command, State, Instigator, Params) ->

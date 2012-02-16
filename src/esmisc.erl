@@ -18,7 +18,8 @@
 	 log/1,
 	 log/2,
 	 parsecmode/2,
-	 atomorunknown/1
+	 atomorunknown/1,
+	 parsejjusers/1
 	]).
 
 %% Spawn functions
@@ -151,11 +152,40 @@ parsecmode(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
 	    parsecmode(Operation, Channel, MRest, Pall)
     end.
 
+
+parsejjusers(UserUIDs) ->
+    lists:foldl(fun(Fullname, A) ->
+			[parsejjuser(Fullname, [])|A]
+		end, [], binary:split(UserUIDs, <<" ">>, [global])).
+
+parsejjuser(<< UT:8, Rest/binary >>=Fullname, Privs) ->
+    case UT of
+	$@ ->
+	    parsejjuser(Rest, [op|Privs]);
+	$% ->
+	    parsejjuser(Rest, [halfop|Privs]);
+	$+ ->
+	    parsejjuser(Rest, [voice|Privs]);
+	_Else ->
+	    #ircchanuser{uid=Fullname, privs=Privs}
+    end.
+
 updateuser(UID, Operation, Privilege, Users) ->
-    Users_R = [E || #ircchanuser{uid=UID_E}=E <- Users,
-		    UID_E =/= UID],
-    Privilege_s = if Operation == add -> Privilege;
-		     true -> undefined end,
+    {Users_R, User} = lists:foldl(fun(#ircchanuser{uid=UID_E}=E, {Otherusers, TheVeryUser}) ->
+					  if
+					      UID_E =:= UID ->
+						  {Otherusers, E};
+					      true ->
+						  {[E|Otherusers], TheVeryUser}
+					  end
+				  end, {[], #ircchanuser{uid=UID, privs=[]}}, Users),
+
+    Privilege_s = if
+		      Operation == add ->
+			  [Privilege|User#ircchanuser.privs];
+		      true ->
+			  User#ircchanuser.privs -- [Privilege]
+		  end,
     [#ircchanuser{uid=UID, privs=Privilege_s}|Users_R].
 		 
 %%====================================================================
