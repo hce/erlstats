@@ -21,7 +21,8 @@
 	 parsecmode/2,
 	 atomorunknown/1,
 	 parsejjusers/1,
-	 removeuser/2
+	 removeuser/2,
+	 removeusermodes/1
 	]).
 
 %% Spawn functions
@@ -64,6 +65,7 @@ parseumode(_Operation, Curmodes, << >>) ->
 parsecmode(Channel, TS, TSModus, Modes) ->
     Channel_U = case {(TS < Channel#ircchannel.ts), TSModus} of
 		    {true, normal} ->
+			esmisc:log("Channel TS was lowered."),
 			Channel#ircchannel{
 			  modes=[],
 			  bans=[],
@@ -71,6 +73,7 @@ parsecmode(Channel, TS, TSModus, Modes) ->
 			  invexps=[],
 			  chanlimit=undefined,
 			  chankey=undefined,
+			  users=removeusermodes(Channel#ircchannel.users),
 			  ts=TS
 			 };
 		    {true, simple} ->
@@ -213,6 +216,9 @@ updateuser(UID, Operation, Privilege, Users) ->
 removeuser(UID, Users) ->
     [E || #ircchanuser{uid=UID_E}=E <- Users,
 	  UID_E =/= UID].
+
+removeusermodes(Users) ->
+    [User#ircchanuser{privs=[]} || User <- Users].
 		 
 %%====================================================================
 %% Internal functions

@@ -524,7 +524,10 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		    topic=[],
 		    ts=list_to_integer(binary_to_list(TS))
 		   };
-		  [A_Channel] -> A_Channel
+		  [A_Channel] ->
+		      A_Channel#ircchannel{
+			users=(Users ++ A_Channel#ircchannel.users)
+		       }
 	      end,
     Channel_U = esmisc:parsecmode(Channel, TS, normal, Modes),
     ets:insert(State#state.channeltable, Channel_U),
