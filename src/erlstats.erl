@@ -208,6 +208,10 @@ handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
     ets:insert(State#state.channeltable, Channel_U),
     {reply, ok, State};
 
+handle_call({irc_raw, Command}, _From, State) ->
+    gen_tcp:send(State#state.socket, [Command, 10]),
+    {reply, ok, State};
+
 handle_call(getusertable, _From, State) ->
     {reply, {ok, State#state.usertable}, State};
 
