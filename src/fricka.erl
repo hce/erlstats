@@ -123,6 +123,12 @@ handle_cast({privmsg, fricka, I, whoami, User, []}, State) ->
 			Msg),
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, info, User, []}, State) ->
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			io_lib:format("\^b*****\^b Here's some info about you \^b*****\^b~n~p~n\^b***** END of info *****\^b",
+				      [User])),
+    {noreply, State};
+
 handle_cast(_Info, State) ->
     {noreply, State}.
 
@@ -154,7 +160,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 cmdlist(fricka) ->
     [
-     whoami
+     whoami,
+     info
     ].
 
 cmdhelp(fricka, whoami) ->
@@ -164,9 +171,21 @@ cmdhelp(fricka, whoami) ->
      {longdesc,    <<"When you are identified to \^bNICKSERV\^b, \^bFRICKA\^b "
 		     "should be aware of that fact. With this command you can "
 		     "find out if she actually is.">>}
+    ];
+
+cmdhelp(fricka, info) ->
+    [
+     {params,     []},
+     {shortdesc,  <<"Show all \^bFRICKA\^b knows about you">>},
+     {longdesc,   <<"\^bFRICKA\^b, being implemented as a network service, knows\n"
+		    "quite a bit about hackint's inhabitants. With this command you\n"
+		    "can find out what information she has on you.">>}
     ].
 
 cmdperm(fricka, whoami) ->
+    []; %% No permission required
+
+cmdperm(fricka, info) ->    
     []. %% No permission required
 
 cmdgenericinfo(fricka) ->
