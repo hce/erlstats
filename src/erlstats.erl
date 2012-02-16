@@ -528,7 +528,31 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 	      end,
     Channel_U = esmisc:parsecmode(Channel, TS, normal, Modes),
     ets:insert(State#state.channeltable, Channel_U),
-    ?DEBUG("New channel: ~p", [Channel_U]),
+    ?DEBUG("Channel SJOIN: ~p", [Channel_U]),
+    State;
+
+irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
+    [Newuser] = esmisc:parsejjusers(UID),
+    Channel = case ets:lookup(State#state.channeltable, Channelname) of
+		  [] -> #ircchannel{
+		    channame=Channelname,
+		    bans=[],
+		    banexps=[],
+		    invexps=[],
+		    chankey=undefined,
+		    modes=[],
+		    users=[Newuser],
+		    topic=[],
+		    ts=list_to_integer(binary_to_list(TS))
+		   };
+		  [A_Channel] ->
+		      A_Channel#ircchannel{
+			users=[Newuser|A_Channel#ircchannel.users]
+		       }
+	      end,
+    Channel_U = esmisc:parsecmode(Channel, TS, normal, [Chanmodes]),
+    ets:insert(State#state.channeltable, Channel_U),
+    ?DEBUG("Channel JOIN: ~p", [Channel_U]),
     State;
 
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
