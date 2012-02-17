@@ -412,6 +412,7 @@ irccmd(quit, State, Quitter, [Reason]) ->
     ?DEBUG("User ~p quit (Reason: ~p)",
 			  [(resolveuser(State, Quitter))#ircuser.nick,
 			   Reason]),
+    channel_handlequit(State, Quitter),
     ets:delete(State#state.usertable, Quitter),
     State;
 
@@ -472,6 +473,7 @@ irccmd(squit, State, [], [SID, Reason]) ->
 			  ets:delete(State#state.servertable, E)
 		  end, Affected_servers),
     lists:foreach(fun(E) ->
+			  channel_handlequit(State, E),
 			  ets:delete(State#state.usertable, E)
 		  end, Affected_users),
     ?DEBUG("Servertable now ~p entries, user table ~p entries.",
@@ -536,7 +538,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		   users=(Channel_U#ircchannel.users ++ Users)
 		  },
     ets:insert(State#state.channeltable, Channel_U2),
-    ?DEBUG("Channel SJOIN: ~p", [Channel_U2]),
+    channel_addusers(State, Users, Name),
     State;
 
 irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
@@ -560,22 +562,11 @@ irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
 	      end,
     Channel_U = esmisc:parsecmode(Channel, TS, normal, [Chanmodes]),
     ets:insert(State#state.channeltable, Channel_U),
-    ?DEBUG("Channel JOIN: ~p", [Channel_U]),
+    channel_addusers(State, [Newuser], Channelname),
     State;
 
 irccmd(part, State, UID, [Channelname]) ->
-    [Channel] = ets:lookup(State#state.channeltable, Channelname),
-    Channel_U = Channel#ircchannel{
-		  users=esmisc:removeuser(UID, Channel#ircchannel.users)
-		 },
-    case Channel_U#ircchannel.users of
-	[] ->
-	    ets:delete(State#state.channeltable, Channelname),
-	    ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
-	_Else ->
-	    ets:insert(State#state.channeltable, Channel_U),
-	    ?DEBUG("Channel PART: ~p", [Channel_U])
-    end,
+    channel_removeusers(State, [#ircchanuser{uid=UID}], Channelname),
     State;
 
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
@@ -956,3 +947,51 @@ handle_plugin_nick_kill(State, User) ->
     PluginPID = dict:fetch(pluginpid, User#ircuser.serverdata),
     exit(PluginPID, irc_killed),
     State.
+
+channel_addusers(#state{usertable=UT}, Users, Channelname) ->    
+    lists:foreach(fun(ICU) ->
+			  [User] = ets:lookup(UT, ICU#ircchanuser.uid),
+			  Channels = User#ircuser.channels,
+			  Channels_U = sets:add_element(Channelname, Channels),
+			  User_U = User#ircuser{
+				     channels=Channels_U
+				    },
+			  ets:insert(UT, User_U)
+		  end, Users).
+
+channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
+    lists:foreach(fun(ICU) ->
+			  UID = ICU#ircchanuser.uid,
+
+			  [Channel] = ets:lookup(State#state.channeltable, Channelname),
+			  Channel_U = Channel#ircchannel{
+					users=esmisc:removeuser(UID, Channel#ircchannel.users)
+				       },
+			  case Channel_U#ircchannel.users of
+			      [] ->
+				  ets:delete(State#state.channeltable, Channelname),
+				  ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
+			      _Else ->
+				  ets:insert(State#state.channeltable, Channel_U),
+				  ?DEBUG("Channel PART: ~p", [Channel_U])
+			  end,
+			  
+			  [User] = ets:lookup(UT, UID),
+			  Channels = User#ircuser.channels,
+			  Channels_U = sets:del_element(Channelname, Channels),
+			  User_U = User#ircuser{
+				     channels=Channels_U
+				    },
+			  ets:insert(UT, User_U)
+		  end, Users).
+
+channel_handlequit(State, UID) ->
+    [User] = ets:lookup(State#state.usertable, UID),
+    User_R = [#ircchanuser{uid=UID}],
+    C = sets:fold(fun(Channelname, Count) ->
+			  channel_removeusers(State, User_R, Channelname),
+			  Count + 1
+		  end, 0, User#ircuser.channels),
+    ?DEBUG("User ~s quit; removed them from ~p channel(s).", [User#ircuser.nick, C]).
+
+			    
