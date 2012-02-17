@@ -676,6 +676,13 @@ irccmd(away, State, UID, []) ->
     end,
     State;
 
+irccmd(topic, State, Setter, [Channelname, Newtopic]) ->
+    [Channel] = ets:lookup(State#state.channeltable, Channelname),
+    Channel_U = Channel#ircchannel{topic=Newtopic},
+    ets:insert(State#state.channeltable, Channel_U),
+    ?DEBUG("~s changed ~s's topic to ~s", [Setter, Channelname, Newtopic]),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
