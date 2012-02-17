@@ -149,6 +149,32 @@ handle_cast({privmsg, fricka, I, wallop, User, Message}, State) ->
 			io_lib:format("Message sent to ~p users.", [C])),
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, uinfo, User, [Usernick]}, State) ->
+    case gen_server:call(erlstats, {getuserfromnick, Usernick}) of
+	{ok, [User_R]} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("\^b*****\^b Here's some info about ~s \^b*****\^b~n~p~n\^b***** END of info *****\^b",
+					      [Usernick, User_R]));
+	{ok, []} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("User ~s does not seem to exist.", [Usernick]))
+    end,
+    {noreply, State};
+
+handle_cast({privmsg, fricka, I, cinfo, User, [Channelname]}, State) ->
+    {ok, Channeltable} = gen_server:call(erlstats, getchanneltable),
+    case ets:lookup(Channeltable, Channelname) of
+	[Channel] ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("\^b*****\^b Here's some info about ~s \^b*****\^b~n~p~n\^b***** END of info *****\^b",
+					      [Channelname, Channel]));
+	[] ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("Channel ~s does not seem to exist.", [Channelname]))
+    end,
+    {noreply, State};
+
+
 handle_cast(_Info, State) ->
     {noreply, State}.
 
@@ -182,14 +208,16 @@ cmdlist(fricka) ->
     [
      whoami,
      info,
-     wallop
+     wallop,
+     uinfo,
+     cinfo
     ].
 
 cmdhelp(fricka, whoami) ->
     [
      {params,      []},
-     {shortdesc,   <<"Check if \^bFRICKA\^b recognises you">>},
-     {longdesc,    <<"When you are identified to \^bNICKSERV\^b, \^bFRICKA\^b "
+     {shortdesc,   <<"Check if \^bFricka\^b recognises you">>},
+     {longdesc,    <<"When you are identified to \^bNickServ\^b, \^bFricka\^b "
 		     "should be aware of that fact. With this command you can "
 		     "find out if she actually is.">>}
     ];
@@ -197,8 +225,8 @@ cmdhelp(fricka, whoami) ->
 cmdhelp(fricka, info) ->
     [
      {params,     []},
-     {shortdesc,  <<"Show all \^bFRICKA\^b knows about you">>},
-     {longdesc,   <<"\^bFRICKA\^b, being implemented as a network service, knows\n"
+     {shortdesc,  <<"Show all \^bFricka\^b knows about you">>},
+     {longdesc,   <<"\^bFricka\^b, being implemented as a network service, knows\n"
 		    "quite a bit about hackint's inhabitants. With this command you\n"
 		    "can find out what information she has on you.">>}
     ];
@@ -212,7 +240,30 @@ cmdhelp(fricka, wallop) ->
 		   "Syntax: WALLOP text\n \n"
 		   "Examples:\n"
 		   "    /msg Fricka WALLOP Hi all, try out our new channel mode +S">>}
+    ];
+
+cmdhelp(fricka, uinfo) ->
+    [
+     {params,    []},
+     {shortdesc, <<"Show information \^bFricka\^b has about a user">>},
+     {longdesc,  <<"Show information \^bFricka\^b has about a user\n \n"
+		   "Syntax: UINFO usernick\n \n"
+		   "Examples:\n"
+		   "    /msg Fricka UINFO hc\n"
+		   "    /msg Fricka UINFO fricka">>}
+    ];
+
+cmdhelp(fricka, cinfo) ->
+    [
+     {params,    []},
+     {shortdesc, <<"Show information \^bFricka\^b has about a channel">>},
+     {longdesc,  <<"Show information \^bFricka\^b has about a channel\n \n"
+		   "Syntax: CINFO channelname\n \n"
+		   "Examples:\n"
+		   "    /msg Fricka CINFO #ircnets\n"
+		   "    /msg Fricka CINFO #hackint">>}
     ].
+
 
 cmdperm(fricka, whoami) ->
     []; %% No permission required
@@ -221,6 +272,12 @@ cmdperm(fricka, info) ->
     []; %% No permission required
 
 cmdperm(fricka, wallop) ->
+    $o; %% Operators only
+
+cmdperm(fricka, uinfo) ->
+    $o; %% Operators only
+
+cmdperm(fricka, cinfo) ->
     $o. %% Operators only
 
 cmdgenericinfo(fricka) ->

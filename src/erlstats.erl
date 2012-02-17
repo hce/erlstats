@@ -223,6 +223,18 @@ handle_call(getusertable, _From, State) ->
 handle_call(getservertable, _From, State) ->
     {reply, {ok, State#state.servertable}, State};
 
+handle_call(getchanneltable, _From, State) ->
+    {reply, {ok, State#state.channeltable}, State};
+
+handle_call({getuserfromnick, Usernick}, _From, State) ->
+    Result = case ets:lookup(State#state.ntuidtable, Usernick) of
+		 [] ->
+		     [];
+		 [{Usernick, UID}] ->
+		     ets:lookup(State#state.usertable, UID)
+	     end,
+    {reply, {ok, Result}, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
