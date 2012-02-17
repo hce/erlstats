@@ -209,7 +209,7 @@ handle_call({irc_cmode, Modesetter, Channel, Modes}, _From, State) ->
 		  Modes),
 
     Channel_U = esmisc:parsecmode(Channel_P, Modes),
-    ?DEBUG("Updating channel ~p ~p: ~p", [Channel, Modes, Channel_U]),
+    ?DEBUG("Updating channel ~p with ~p.", [Channel, Modes]),
     ets:insert(State#state.channeltable, Channel_U),
     {reply, ok, State};
 
@@ -263,7 +263,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     Len = size(Data) - 2,  % Substract the length of \r\n
     << Data_wr:Len/binary, _CRLF/binary >> = Data,
 
-    ?DEBUG("Parsing ~p", [Data_wr]),
+    ?DEBUG("Parsing: ~s", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_atom = esmisc:atomorunknown(Command),
@@ -411,7 +411,7 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
     State;
 
 irccmd(kill, State, Killer, [Killee, Reason]) ->
-    ?DEBUG("Received KILL for ~p from ~p (Reason ~p)",
+    ?DEBUG("Received KILL for ~s from ~s (Reason ~s)",
 			  [(resolveuser(State, Killee))#ircuser.nick,
 			   (resolveuser(State, Killer))#ircuser.nick,
 			   Reason]),
@@ -428,7 +428,7 @@ irccmd(kill, State, Killer, [Killee, Reason]) ->
     Newstate;
 
 irccmd(quit, State, Quitter, [Reason]) ->
-    ?DEBUG("User ~p quit (Reason: ~p)",
+    ?DEBUG("User ~s quit (Reason: ~s)",
 			  [(resolveuser(State, Quitter))#ircuser.nick,
 			   Reason]),
     channel_handlequit(State, Quitter),
@@ -514,7 +514,7 @@ irccmd(nick, State, NickChanger, [Newnick, TS]) ->
     User = resolveuser(State, NickChanger),
     delfromntuidtable(State, User#ircuser.nick),
     ets:insert(State#state.ntuidtable, {Newnick, NickChanger}),
-    ?DEBUG("~p (~p) is changing their nick to ~p at ~p",
+    ?DEBUG("~s (~s) is changing their nick to ~s at ~p",
 			  [User#ircuser.nick, NickChanger,
 			   Newnick, TS]),
     User_Updated = User#ircuser{
@@ -531,7 +531,7 @@ irccmd(mode, State, _Changer, [Changee, Newmodes]) ->
 		     modes=Resultingmodes
 		    },
     ets:insert(State#state.usertable, User_Updated),
-    ?DEBUG("Mode change for user ~p: ~p => ~p",
+    ?DEBUG("Mode change for user ~s: ~s => ~s",
 			  [User#ircuser.nick, Newmodes, Resultingmodes]),
     State;
 
@@ -594,10 +594,9 @@ irccmd(part, State, UID, [Channelname]) ->
 
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     [Channel] = ets:lookup(State#state.channeltable, Channame),
-    ?DEBUG("Updating channel ~p ~p: ~p", [Channame, Modestring, Channel]),
+    ?DEBUG("Updating channel ~s: ~p", [Channame, Modestring]),
     Channel_U = esmisc:parsecmode(Channel, TS, simple, Modestring),
     ets:insert(State#state.channeltable, Channel_U),
-    ?DEBUG("Updated channel ~p ~p: ~p", [Channame, Modestring, Channel_U]),
 
     PluginParams = #irccmdtmode{
       issuer=Issuer,
@@ -647,7 +646,7 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
 				  "but ~p is not in our user table!",
 				  [SourceSID, UID, Accountname, UID]);
 	[User] ->
-	    ?DEBUG("~p authenticates ~p as ~p",
+	    ?DEBUG("~s authenticates ~s as ~s",
 		   [SourceSID, UID, Accountname]),
 	    User_U = User#ircuser{authenticated={SourceSID, Accountname}},
 	    ets:insert(State#state.usertable, User_U)
@@ -659,7 +658,7 @@ irccmd(away, State, UID, [Awaymsg]) ->
 	[User] ->
 	    User_U = User#ircuser{away=Awaymsg},
 	    ets:insert(State#state.usertable, User_U),
-	    ?DEBUG("~s ~s is now away: ~p.", [UID, User#ircuser.nick, Awaymsg]);
+	    ?DEBUG("~s ~s is now away: ~s.", [UID, User#ircuser.nick, Awaymsg]);
 	[] ->
 	    ?DEBUG("UID ~s does not exist!", [UID])
     end,
@@ -1004,7 +1003,7 @@ channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
 				  ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
 			      _Else ->
 				  ets:insert(State#state.channeltable, Channel_U),
-				  ?DEBUG("Channel PART: ~p", [Channel_U])
+				  ?DEBUG("~s got removed from ~s", [ICU#ircchanuser.uid, Channelname])
 			  end,
 			  
 			  [User] = ets:lookup(UT, UID),
