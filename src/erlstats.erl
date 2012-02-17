@@ -19,7 +19,8 @@
 	 irc_kill/3,
 	 irc_kline/4,
 	 irc_cmode/3,
-	 irc_notice/3
+	 irc_notice/3,
+	 irc_notice/4
 	]).
 
 %% gen_server callbacks
@@ -307,6 +308,9 @@ irc_cmode(Modesetter, Channel, Modes) ->
 irc_notice(Noticer, Noticee, Notice) ->
     gen_server:cast(erlstats, {irccmd_notice, Noticer, Noticee, Notice}).
 
+irc_notice(Noticer, Noticee, Notice, Format_params) ->
+    gen_server:cast(erlstats, {irccmd_notice, Noticer, Noticee,
+			       io_lib:format(Notice, Format_params)}).
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -769,14 +773,28 @@ handle_channel_privmsg(State, _Messager, _ChanName, _Message) ->
     State.
 
 handle_nick_privmsg(State, Messager, Nickname, Message) ->
+    Message_Trimmed = iolist_to_binary(
+			re:replace(
+			  Message, << " *\$" >>, << "" >>, [global])),
     User = find_plugin_user(State, Nickname),
     Messager_User = resolveuser(State, Messager),
     Nickname_Atom = esmisc:atomorunknown(Nickname),
     ?DEBUG("Message to ~p from ~p: ~p", [Nickname_Atom,
 					 Messager_User#ircuser.nick,
-					 Message]),
+					 Message_Trimmed]),
 
-    [Message_Cmd_B|Params] = binary:split(Message, <<" ">>, [global]),
+    if
+	Nickname_Atom == unknown ->
+	    error_logger:info_msg("Message to unknown plugin ~s!", [Nickname]),
+	    State;
+	true ->
+	    handle_nick_privmsg(second, State, Messager, Nickname, Message_Trimmed,
+			       	User, Messager_User, Nickname_Atom)
+    end.
+
+handle_nick_privmsg(second, State, Messager, _Nickname, Message_Trimmed,
+		    User, Messager_User, Nickname_Atom) ->
+    [Message_Cmd_B|Params] = binary:split(Message_Trimmed, <<" ">>, [global]),
     Message_Cmd_A = esmisc:atomorunknown(Message_Cmd_B),
 
     PID = dict:fetch(pluginpid, User#ircuser.serverdata),
@@ -804,7 +822,10 @@ handle_nick_privmsg(State, Messager, Nickname, Message) ->
 					  Params});
 		false ->
 		    irc_notice(User#ircuser.uid, Messager,
-			       "Permission denied")
+			       "Permission denied");
+		command_does_not_exist ->
+		    irc_notice(User#ircuser.uid, Messager,
+			       "Unknown command ~s", [Message_Cmd_B])
 	    end
     end,
     
@@ -818,7 +839,7 @@ handle_plugin_help(Pluginuser,
 	true ->
 	    handle_plugin_help(checked, Pluginuser, Askeruser,
 			       Pluginmodule, Nickname, Command);
-	false ->
+	_Else ->
 	    irc_notice(Pluginuser#ircuser.uid, Askeruser#ircuser.uid,
 		       io_lib:format("No help available for ~p.", [Command]))
     end.
@@ -901,7 +922,7 @@ help_format_commands(unsafe, Pluginmodule,
 			 true ->
 			      [Formatted,10|Acc]
 		      end;
-		  false ->
+		  _Else ->
 		      Acc
 	      end
       end, [], List).
@@ -927,9 +948,10 @@ check_command_permission(Pluginmodule, Nickname,
 	authed ->
 	    is_tuple(Command_giver#ircuser.authenticated);
 	Else2 ->
-	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2])
-    catch _:_ ->
+	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2]),
 	    false
+    catch _:_ ->
+	    command_does_not_exist
     end.
 
 find_plugin_user(State, Usernick) ->
