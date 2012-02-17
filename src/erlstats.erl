@@ -267,7 +267,6 @@ handle_info({tcp, _Socket, Data}, State) ->
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_atom = esmisc:atomorunknown(Command),
-						%io:format("Command ~p[~p] Inst ~p Params ~p~n", [Command_atom, Command_lower, Instigator, Params]),
 		       irccmd(Command_atom, State, Instigator, Params);
 		   Else ->
 		       error_logger:error_msg("Unable to handle received line ~p", [Else]),
@@ -348,7 +347,7 @@ irccmd(notice, State, Instigator, [<<"AUTH">>, Authprocess]) ->
     State;
 
 irccmd(notice, State, Instigator, Params) ->
-    io:format("Got ~p from ~p", [Params, Instigator]),
+    ?DEBUG("Got ~p from ~p", [Params, Instigator]),
     State;
 
 irccmd(ping, State, [], [Pongparam]) ->
