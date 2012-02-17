@@ -78,8 +78,8 @@ handle_cast(initialize, State) ->
     {ok, User} = gen_server:call(erlstats, {register_user,
 					    << "FRICKA" >>,
 					    << "fricka" >>,
-					    << "~hs" >>,
-					    << "services." >>,
+					    << "hs" >>,
+					    << "services.hackint.org" >>,
 					    << "Fricka" >>,
 					    << "Frech wacht Fricka ueber's HackINT" >>, ?MODULE}),
     {noreply, State#state{frickauser=User}};
