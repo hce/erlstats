@@ -588,7 +588,7 @@ irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
     channel_addusers(State, [Newuser], Channelname),
     State;
 
-irccmd(part, State, UID, [Channelname]) ->
+irccmd(part, State, UID, [Channelname|_Perhapsreason]) ->
     channel_removeusers(State, [#ircchanuser{uid=UID}], Channelname),
     State;
 
