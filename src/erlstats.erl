@@ -993,8 +993,8 @@ channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
 			  Channel_U = Channel#ircchannel{
 					users=esmisc:removeuser(UID, Channel#ircchannel.users)
 				       },
-			  case Channel_U#ircchannel.users of
-			      [] ->
+			  case dict:size(Channel_U#ircchannel.users) of
+			      0 ->
 				  ets:delete(State#state.channeltable, Channelname),
 				  ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
 			      _Else ->
