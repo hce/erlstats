@@ -30,6 +30,7 @@
 	  socket,
 	  sid,
 	  usertable,
+	  ntuidtable,
 	  servertable,
 	  channeltable,
 	  me,
@@ -78,9 +79,10 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
 
     ts6:sts_login(S, SID, Nodename, Password, Node_Description),
 
-    Usertable   = ets:new(usertable,   [set, protected, {keypos, 2}]),
-    Chantable   = ets:new(chantable,   [set, protected, {keypos, 2}]),
-    Servertable = ets:new(servertable, [set, protected, {keypos, 2}]),
+    Usertable   = ets:new(usertable,      [set, protected, {keypos, 2}]),
+    Chantable   = ets:new(chantable,      [set, protected, {keypos, 2}]),
+    Servertable = ets:new(servertable,    [set, protected, {keypos, 2}]),
+    NTUIDtable  = ets:new(nicktouidtable, [set, protected, {keypos, 1}]),
     
     ME = #ircserver{
       sid=SID,
@@ -94,6 +96,7 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
        socket=S,
        sid=SID,
        usertable=Usertable,
+       ntuidtable=NTUIDtable,
        servertable=Servertable,
        channeltable=Chantable,
        me=ME,
@@ -171,6 +174,7 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription, Sour
       serverdata=Serverdata
      },
     ets:insert(State#state.usertable, User),
+    ets:insert(State#state.ntuidtable, {Nick, UID}),
     ts6:sts_newuser(State#state.socket, User),
     Plugin_U = Plugin#ircplugin{
 		 users=[User|Users]
@@ -185,6 +189,7 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription, Sour
 handle_call({irc_kill, Killer, Killee, Reason}, _From, State) ->
     Killername = (resolveuser(State, Killer))#ircuser.nick,
     ts6:sts_kill(State#state.socket, Killer, Killername, Killee, Reason),
+    delfromntuidtable(State, Killee),
     ets:delete(State#state.usertable, Killee),
     {reply, ok, State};
 
@@ -370,6 +375,7 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       away=undefined
      },
 
+    ets:insert(State#state.ntuidtable, {Nick, UID}),
     ets:insert(State#state.usertable, User),
 
     ?DEBUG("New user: ~p", [User]),
@@ -399,6 +405,7 @@ irccmd(kill, State, Killer, [Killee, Reason]) ->
 			   Reason]),
     MYSID = (State#state.me)#ircserver.sid,
     Lookitupfirst = ets:lookup(State#state.usertable, Killee),
+    delfromntuidtable(State, Killee),
     ets:delete(State#state.usertable, Killee),
     Newstate = case Lookitupfirst of
 		   [#ircuser{sid=MYSID}=User] ->
@@ -413,6 +420,7 @@ irccmd(quit, State, Quitter, [Reason]) ->
 			  [(resolveuser(State, Quitter))#ircuser.nick,
 			   Reason]),
     channel_handlequit(State, Quitter),
+    delfromntuidtable(State, Quitter),
     ets:delete(State#state.usertable, Quitter),
     State;
 
@@ -474,6 +482,7 @@ irccmd(squit, State, [], [SID, Reason]) ->
 		  end, Affected_servers),
     lists:foreach(fun(E) ->
 			  channel_handlequit(State, E),
+			  delfromntuidtable(State, E),
 			  ets:delete(State#state.usertable, E)
 		  end, Affected_users),
     ?DEBUG("Servertable now ~p entries, user table ~p entries.",
@@ -491,6 +500,8 @@ irccmd(svinfo, State, [], _Parameters) ->
 
 irccmd(nick, State, NickChanger, [Newnick, TS]) ->
     User = resolveuser(State, NickChanger),
+    delfromntuidtable(State, User#ircuser.nick),
+    ets:insert(State#state.ntuidtable, {Newnick, NickChanger}),
     ?DEBUG("~p (~p) is changing their nick to ~p at ~p",
 			  [User#ircuser.nick, NickChanger,
 			   Newnick, TS]),
@@ -934,6 +945,7 @@ remove_plugin_user(State, FromPid, Plugin, User, Quitreason) ->
     case ets:lookup(State#state.usertable, User#ircuser.uid) of
 	[_Someuser] ->
 	    ts6:sts_quituser(State#state.socket, User, Quitreason),
+	    delfromntuidtable(State, User#ircuser.uid),
 	    ets:delete(State#state.usertable, User#ircuser.uid),
 	    ?DEBUG("Removing user ~p from plugin with pid ~p.",
 		   [User#ircuser.nick, FromPid]);
@@ -994,4 +1006,11 @@ channel_handlequit(State, UID) ->
 		  end, 0, User#ircuser.channels),
     ?DEBUG("User ~s quit; removed them from ~p channel(s).", [User#ircuser.nick, C]).
 
-			    
+delfromntuidtable(State, Nick) ->			    
+    case ets:lookup(State#state.usertable, Nick) of
+	[User] ->
+	    ets:delete(State#state.ntuidtable, User#ircuser.nick);
+	_Else ->
+	    ok
+    end.
+
