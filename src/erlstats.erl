@@ -548,7 +548,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		    invexps=[],
 		    chankey=undefined,
 		    modes=[],
-		    users=[],
+		    users=dict:new(),
 		    topic=[],
 		    ts=list_to_integer(binary_to_list(TS))
 		   };
@@ -556,9 +556,7 @@ irccmd(sjoin, State, _Introducer, [TS, Name|ModesAndUserUIDs]) ->
 		      A_Channel
 	      end,
     Channel_U = esmisc:parsecmode(Channel, list_to_integer(binary_to_list(TS)), normal, Modes),
-    Channel_U2 = Channel_U#ircchannel{
-		   users=(Channel_U#ircchannel.users ++ Users)
-		  },
+    Channel_U2 = esmisc:addchanusers(Channel_U, Users),
     ets:insert(State#state.channeltable, Channel_U2),
     channel_addusers(State, Users, Name),
     State;
@@ -573,17 +571,16 @@ irccmd(join, State, UID, [TS, Channelname, Chanmodes]) ->
 		    invexps=[],
 		    chankey=undefined,
 		    modes=[],
-		    users=[Newuser],
+		    users=dict:new(),
 		    topic=[],
 		    ts=list_to_integer(binary_to_list(TS))
 		   };
 		  [A_Channel] ->
-		      A_Channel#ircchannel{
-			users=[Newuser|A_Channel#ircchannel.users]
-		       }
+		      A_Channel
 	      end,
-    Channel_U = esmisc:parsecmode(Channel, TS, normal, [Chanmodes]),
-    ets:insert(State#state.channeltable, Channel_U),
+    Channel_U = esmisc:addchanusers(Channel, [Newuser]),
+    Channel_U2 = esmisc:parsecmode(Channel_U, TS, normal, [Chanmodes]),
+    ets:insert(State#state.channeltable, Channel_U2),
     channel_addusers(State, [Newuser], Channelname),
     State;
 

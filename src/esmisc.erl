@@ -22,7 +22,8 @@
 	 atomorunknown/1,
 	 parsejjusers/1,
 	 removeuser/2,
-	 removeusermodes/1
+	 removeusermodes/1,
+	 addchanusers/2
 	]).
 
 %% Spawn functions
@@ -100,7 +101,7 @@ parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall) ->
 	{true, _, _} ->
 	    Newmodes = case Operation of
 			   add ->
-			       [Modechar|Channel#ircchannel.modes];
+			       lists:usort([Modechar|Channel#ircchannel.modes]);
 			   remove ->
 			       Channel#ircchannel.modes -- [Modechar]
 		       end,
@@ -196,29 +197,34 @@ parsejjuser(<< UT:8, Rest/binary >>=Fullname, Privs) ->
     end.
 
 updateuser(UID, Operation, Privilege, Users) ->
-    {Users_R, User} = lists:foldl(fun(#ircchanuser{uid=UID_E}=E, {Otherusers, TheVeryUser}) ->
-					  if
-					      UID_E =:= UID ->
-						  {Otherusers, E};
-					      true ->
-						  {[E|Otherusers], TheVeryUser}
-					  end
-				  end, {[], #ircchanuser{uid=UID, privs=[]}}, Users),
-
+    User = case dict:find(UID, Users) of
+	       {ok, Theuser} ->
+		   Theuser;
+	       error ->
+		   #ircchanuser{uid=UID, privs=[]}
+	   end,
     Privilege_s = if
 		      Operation == add ->
-			  [Privilege|User#ircchanuser.privs];
+			  lists:usort([Privilege|User#ircchanuser.privs]);
 		      true ->
 			  User#ircchanuser.privs -- [Privilege]
 		  end,
-    [#ircchanuser{uid=UID, privs=Privilege_s}|Users_R].
+    User_U = User#ircchanuser{privs=Privilege_s},
+    dict:store(UID, User_U, Users).
 
 removeuser(UID, Users) ->
-    [E || #ircchanuser{uid=UID_E}=E <- Users,
-	  UID_E =/= UID].
+    dict:erase(UID, Users).
 
 removeusermodes(Users) ->
-    [User#ircchanuser{privs=[]} || User <- Users].
+    dict:fold(fun(K, V, ND) ->
+		      dict:store(K, V#ircchanuser{privs=[]}, ND)
+	      end, dict:new(), Users).
+
+addchanusers(#ircchannel{users=Users}=Channel, Newusers) ->
+    Users_U = lists:foldl(fun(#ircchanuser{uid=UID}=Newuser, Usrdict) ->
+				  dict:store(UID, Newuser, Usrdict)
+			  end, Users, Newusers),
+    Channel#ircchannel{users=Users_U}.
 		 
 %%====================================================================
 %% Internal functions
