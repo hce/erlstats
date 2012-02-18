@@ -592,6 +592,11 @@ irccmd(part, State, UID, [Channelname|_Perhapsreason]) ->
     channel_removeusers(State, [#ircchanuser{uid=UID}], Channelname),
     State;
 
+irccmd(kick, State, Kicker, [Channelname, Kickee, Reason|_Else]) ->
+    channel_removeusers(State, [#ircchanuser{uid=Kickee}], Channelname),
+    ?DEBUG("~s Kicked ~s from ~s (~s)", [Kicker, Kickee, Channelname, Reason]),
+    State;
+
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
     [Channel] = ets:lookup(State#state.channeltable, Channame),
     ?DEBUG("Updating channel ~s: ~p", [Channame, Modestring]),
