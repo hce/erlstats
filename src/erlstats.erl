@@ -258,6 +258,7 @@ handle_cast({irccmd_notice, Noticer, Noticee, Notice}, State) ->
 handle_cast({irccmd_encap_chanacs, Nickservuser, Channelname}, State) ->
     Reference = iolist_to_binary(io_lib:format("~p", [make_ref()])),
     ts6:sts_encap(State#state.socket,
+		  State#state.sid,
 		  <<"services.hackint.org">>,
 		  <<"QUERYCHANACS">>,
 		  [Reference, Channelname, Nickservuser]),
