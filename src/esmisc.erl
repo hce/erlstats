@@ -23,7 +23,8 @@
 	 parsejjusers/1,
 	 removeuser/2,
 	 removeusermodes/1,
-	 addchanusers/2
+	 addchanusers/2,
+	 parseduration/1
 	]).
 
 %% Spawn functions
@@ -225,6 +226,34 @@ addchanusers(#ircchannel{users=Users}=Channel, Newusers) ->
 				  dict:store(UID, Newuser, Usrdict)
 			  end, Users, Newusers),
     Channel#ircchannel{users=Users_U}.
+
+parseduration(Duration) when is_binary(Duration) ->
+    parseduration(binary_to_list(Duration));
+parseduration([]) ->
+    {error, "Illegal value"};
+parseduration(Duration) when is_list(Duration) ->
+    Duration_C = lists:sublist(Duration, 1, length(Duration) - 1),
+    {Number_S, Factor} = case lists:last(Duration) of
+			     $s -> {Duration_C, 1};
+			     $S -> {Duration_C, 1};
+			     $m -> {Duration_C, 60};
+			     $M -> {Duration_C, 60};
+			     $h -> {Duration_C, 3600};
+			     $H -> {Duration_C, 3600};
+			     $d -> {Duration_C, 86400};
+			     $D -> {Duration_C, 86400};
+			     _Else -> {Duration, 1}
+			 end,
+    case string:to_integer(Number_S) of
+	{error, _Reason}=Error ->
+	    Error;
+	{Number, []} when Number > 0->
+	    {ok, Number * Factor};
+	{_Number, []} ->
+	    {error, "A positive value is required"};
+	{_Number, _Rest} ->
+	    {error, "Only integers are allowed."}
+    end.
 		 
 %%====================================================================
 %% Internal functions

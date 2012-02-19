@@ -70,3 +70,5 @@
 			 expirytime,
 			 result}).
 
+-record(mchansettings, {chans,
+			value}).

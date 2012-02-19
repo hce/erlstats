@@ -1,2 +1,2 @@
 #!/bin/sh
-exec erl -pa ebin -eval 'esmisc:openlog().' -eval 'application:start(crypto)' -eval 'application:start(sasl).' -eval 'application:start(erlstats, permanent).'
+exec erl -pa ebin -eval 'application:start(mnesia).' -eval 'esmisc:openlog().' -eval 'application:start(crypto)' -eval 'application:start(sasl).' -eval 'application:start(erlstats, permanent).'
