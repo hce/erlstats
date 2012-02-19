@@ -393,7 +393,7 @@ handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname]}, State) ->
     {noreply, State};
 
 handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname, <<"off">>]}, State) ->
-    [_Auther, Nickservusername] = User#ircuser.authenticated,
+    {_Auther, Nickservusername} = User#ircuser.authenticated,
     Trans = fun() ->
 		    mnesia:delete({mchansettings, {Channelname, autounban}})
 	    end,
@@ -408,7 +408,7 @@ handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname, <<"off">>]}, 
     {noreply, State};
 
 handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname, Duration]}, State) ->
-    [_Auther, Nickservusername] = User#ircuser.authenticated,
+    {_Auther, Nickservusername} = User#ircuser.authenticated,
     case esmisc:parseduration(Duration) of
 	{error, Reason} ->
 	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
