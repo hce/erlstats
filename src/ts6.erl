@@ -25,7 +25,8 @@
 	 sts_whoisaddconninfo/6,
 	 sts_whoisfinished/4,
 	 sts_whoisnotfound/5,
-	 sts_ping/2
+	 sts_ping/2,
+	 sts_encap/5
 	]).
 
 %%====================================================================
@@ -158,7 +159,13 @@ sts_ping(S, Value) ->
     gen_tcp:send(S,
 		 [<< "PING :" >>, Value, 10]).
     
-    
+sts_encap(S, Source, Targets, Command, Parameters) ->    
+    Parm_list = lists:foldl(fun(E, Acc) ->
+				    [Acc, << " " >>, E]
+			    end, [], Parameters),
+    gen_tcp:send(S,
+		 [<< ":" >>, Source, << " ENCAP " >>,
+		  Targets, << " " >>, Command, Parm_list, 10]).
 		   
 
 %%====================================================================

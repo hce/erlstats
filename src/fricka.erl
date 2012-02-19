@@ -129,69 +129,6 @@ handle_cast({privmsg, fricka, I, info, User, []}, State) ->
 				      [User])),
     {noreply, State};
 
-handle_cast({privmsg, fricka, I, autounban, User, [Channelname]}, State) ->
-    Trans = fun() ->
-		    mnesia:read(mchansettings, {Channelname, autounban})
-	    end,
-    case mnesia:transaction(Trans) of
-	{atomic, [Autounbaninfo]} ->
-	    Numsecs = orddict:fetch(secstounban, Autounbaninfo#mchansettings.value),
-	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-				"Autounban is activated for ~s. Bans will be removed " %% No \n for command results
-				"after ~p seconds.~n", [Channelname, Numsecs]);
-	_Else ->
-	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-				"Autounban is not enabled for ~s.",
-				[Channelname])
-    end,
-    {noreply, State};
-
-handle_cast({privmsg, fricka, I, autounban, User, [Channelname, <<"off">>]}, State) ->
-    [_Auther, Nickservusername] = User#ircuser.authenticated,
-    Trans = fun() ->
-		    mnesia:delete({mchansettings, {Channelname, autounban}})
-	    end,
-    {atomic, ok} = mnesia:transaction(Trans),
-    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-			"Autounban is now \^boff\^b for \^b~s\^b.",
-			[Channelname]),
-    erlstats:irc_notice(I#ircuser.sid, Channelname,
-			"(\^bFricka\^b) ~s (NickServ ~s) DISABLED autounban for ~s",
-			[User#ircuser.nick, Nickservusername,
-			 Channelname]),
-    {noreply, State};
-
-handle_cast({privmsg, fricka, I, autounban, User, [Channelname, Duration]}, State) ->
-    [_Auther, Nickservusername] = User#ircuser.authenticated,
-    case esmisc:parseduration(Duration) of
-	{error, Reason} ->
-	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-				"Illegal duration: ~s", [Reason]);
-	{ok, Duration_Secs} when Duration_Secs < 300 ->
-	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-				"Duration must be at least 300 seconds.");
-	{ok, Duration_Secs} ->
-	    Dict = [{channelname, Channelname},
-		    {secstounban, Duration_Secs},
-		    {setter, User#ircuser.authenticated}],
-	    Record = #mchansettings{
-	      chans={Channelname, autounban},
-	      value=Dict
-	     },
-	    Trans = fun() ->
-			    mnesia:write(Record)
-		    end,
-	    {atomic, ok} = mnesia:transaction(Trans),
-	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
-				"Successfully set autounban for ~s to ~p seconds.",
-				[Channelname, Duration_Secs]),
-	    erlstats:irc_notice(I#ircuser.sid, Channelname,
-				"(\^bFricka\^b) ~s (NickServ ~s) ENABLED autounban after ~p seconds for ~s",
-				[User#ircuser.nick, Nickservusername,
-				 Duration_Secs, Channelname])
-    end,
-    {noreply, State};
-
 handle_cast({privmsg, fricka, I, wallop, User, Message}, State) ->
     {ok, Usertable} = gen_server:call(erlstats, getusertable),
     Message_F = [binary_to_list(Word) || Word <- Message],
@@ -237,6 +174,36 @@ handle_cast({privmsg, fricka, I, cinfo, User, [Channelname]}, State) ->
     end,
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, autounban, User, [Channelname|_Maybesomething]}=Parms, State) ->
+    case User#ircuser.authenticated of
+	{_Authenticator, Nickservuser} ->
+	    case erlstats:irc_get_chanacs(Nickservuser, Channelname) of
+		{ok, Accessflags} ->
+		    case binary:match(Accessflags, << "f" >>) of
+			nomatch ->
+			    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+						"You need the +f flag for ~s",
+						[Channelname]),
+			    {noreply, State};
+			_Somematch ->
+			    handle_cast_ap(Parms, State)
+		    end;
+		channotregistered ->
+		    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+					"Channel ~s is not registered with ChanServ.",
+					[Channelname]),
+		    {noreply, State};
+		_Else ->
+		    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+					"Permission denied for channel ~s",
+					[Channelname]),
+		    {noreply, State}
+	    end;
+	false ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"You are not identified to \^bNickServ\^b"),
+	    {noreply, State}
+    end;
 
 handle_cast(_Info, State) ->
     {noreply, State}.
@@ -401,3 +368,67 @@ find_nicks_to_unhalfop(Channel, << Modechange:8, R/binary >>, [Param|Rest]=Param
     end;
 find_nicks_to_unhalfop(_Channel, _Modechanges, _Shouldbeempty, _Addrem) ->
     [].
+
+
+handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname]}, State) ->
+    Trans = fun() ->
+		    mnesia:read(mchansettings, {Channelname, autounban})
+	    end,
+    case mnesia:transaction(Trans) of
+	{atomic, [Autounbaninfo]} ->
+	    Numsecs = orddict:fetch(secstounban, Autounbaninfo#mchansettings.value),
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"Autounban is activated for ~s. Bans will be removed " %% No \n for command results
+				"after ~p seconds.~n", [Channelname, Numsecs]);
+	_Else ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"Autounban is not enabled for ~s.",
+				[Channelname])
+    end,
+    {noreply, State};
+
+handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname, <<"off">>]}, State) ->
+    [_Auther, Nickservusername] = User#ircuser.authenticated,
+    Trans = fun() ->
+		    mnesia:delete({mchansettings, {Channelname, autounban}})
+	    end,
+    {atomic, ok} = mnesia:transaction(Trans),
+    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+			"Autounban is now \^boff\^b for \^b~s\^b.",
+			[Channelname]),
+    erlstats:irc_notice(I#ircuser.sid, Channelname,
+			"(\^bFricka\^b) ~s (NickServ ~s) DISABLED autounban for ~s",
+			[User#ircuser.nick, Nickservusername,
+			 Channelname]),
+    {noreply, State};
+
+handle_cast_ap({privmsg, fricka, I, autounban, User, [Channelname, Duration]}, State) ->
+    [_Auther, Nickservusername] = User#ircuser.authenticated,
+    case esmisc:parseduration(Duration) of
+	{error, Reason} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"Illegal duration: ~s", [Reason]);
+	{ok, Duration_Secs} when Duration_Secs < 300 ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"Duration must be at least 300 seconds.");
+	{ok, Duration_Secs} ->
+	    Dict = [{channelname, Channelname},
+		    {secstounban, Duration_Secs},
+		    {setter, User#ircuser.authenticated}],
+	    Record = #mchansettings{
+	      chans={Channelname, autounban},
+	      value=Dict
+	     },
+	    Trans = fun() ->
+			    mnesia:write(Record)
+		    end,
+	    {atomic, ok} = mnesia:transaction(Trans),
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"Successfully set autounban for ~s to ~p seconds.",
+				[Channelname, Duration_Secs]),
+	    erlstats:irc_notice(I#ircuser.sid, Channelname,
+				"(\^bFricka\^b) ~s (NickServ ~s) ENABLED autounban after ~p seconds for ~s",
+				[User#ircuser.nick, Nickservusername,
+				 Duration_Secs, Channelname])
+    end,
+    {noreply, State}.

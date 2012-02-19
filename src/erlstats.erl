@@ -20,7 +20,8 @@
 	 irc_kline/4,
 	 irc_cmode/3,
 	 irc_notice/3,
-	 irc_notice/4
+	 irc_notice/4,
+	 irc_get_chanacs/2
 	]).
 
 %% gen_server callbacks
@@ -34,6 +35,7 @@
 	  ntuidtable,
 	  servertable,
 	  channeltable,
+	  referencetable,
 	  me,
 	  connectiondetails,
 	  remotepassword,
@@ -84,6 +86,7 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
     Chantable   = ets:new(chantable,      [set, protected, {keypos, 2}]),
     Servertable = ets:new(servertable,    [set, protected, {keypos, 2}]),
     NTUIDtable  = ets:new(nicktouidtable, [set, protected, {keypos, 1}]),
+    Reftable    = ets:new(reftable,       [set, protected, {keypos, 1}]),
     
     ME = #ircserver{
       sid=SID,
@@ -100,6 +103,7 @@ init([Host, Port, Nodename, SID, Password, Remotepassword, Node_Description]=Con
        ntuidtable=NTUIDtable,
        servertable=Servertable,
        channeltable=Chantable,
+       referencetable=Reftable,
        me=ME,
        connectiondetails=Connectiondetails,
        remotepassword=Remotepassword,
@@ -251,6 +255,14 @@ handle_cast({irccmd_notice, Noticer, Noticee, Notice}, State) ->
 		   Noticer, Noticee, Notice),
     {noreply, State};
 
+handle_cast({irccmd_encap_chanacs, Nickservuser, Channelname}, State) ->
+    Reference = iolist_to_binary(io_lib:format("~p", [make_ref()])),
+    ts6:sts_encap(State#state.socket,
+		  <<"services.hackint.org">>,
+		  <<"QUERYCHANACS">>,
+		  [Reference, Channelname, Nickservuser]),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -311,6 +323,15 @@ irc_notice(Noticer, Noticee, Notice) ->
 irc_notice(Noticer, Noticee, Notice, Format_params) ->
     gen_server:cast(erlstats, {irccmd_notice, Noticer, Noticee,
 			       io_lib:format(Notice, Format_params)}).
+
+irc_get_chanacs(Nickservuser, Channelname) ->
+    gen_server:cast(erlstats, {irccmd_encap_chanacs, Nickservuser, Channelname}),
+    receive
+	{chanacs, Nickservuser, Channelname, Accessflags} ->
+	    {ok, Accessflags}
+    after 4200 ->
+	    {error, timeout}
+    end.
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()
@@ -648,7 +669,7 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     case ets:lookup(State#state.usertable, UID) of
 	[] ->
 	    error_logger:info_msg("Error: ~p reports ~p authenticated as ~p, "
-				  "but ~p is not in our user table!",
+				  "but ~p is not in our user table! (anymore?)",
 				  [SourceSID, UID, Accountname, UID]);
 	[User] ->
 	    ?DEBUG("~s authenticates ~s as ~s",
@@ -657,6 +678,14 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
 	    ets:insert(State#state.usertable, User_U)
     end,
     State;
+
+irccmd(encap, State, _SourceSID, [_Targets, <<"CHANACS">>, Reference, <<"ACCESS">>, Accessflags]) ->
+    [{Return_PID, Nickservuser, Channelname}] = 
+	ets:lookup(State#state.referencetable, Reference),
+    Return_PID ! {chanacs, Nickservuser, Channelname, Accessflags},
+    ets:delete(State#state.referencetable, Reference),
+    State;
+    
 
 irccmd(away, State, UID, [Awaymsg]) ->
     case ets:lookup(State#state.usertable, UID) of
