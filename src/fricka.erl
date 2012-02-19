@@ -232,13 +232,13 @@ handle_cast(_Info, State) ->
 handle_info(checkbans, State) ->
     {ok, Channeltable} = gen_server:call(erlstats, getchanneltable),
     ets:foldl(fun(Channel, _Ignore) ->
-		      ?DEBUG("Checkbans: ~p", [Channel]),
+		      %% ?DEBUG("Checkbans: ~p", [Channel]),
 		      Trans = fun() ->
 				      mnesia:read(mchansettings, {Channel#ircchannel.channame, autounban})
 			      end,
 		      case mnesia:transaction(Trans) of
 			  {atomic, [Autounbaninfo]} ->
-			      ?DEBUG("Checkbans: ~p ~p", [Channel, Autounbaninfo]),
+			      %% ?DEBUG("Checkbans: ~p ~p", [Channel, Autounbaninfo]),
 			      Minage = esmisc:curtime() - orddict:fetch(secstounban, Autounbaninfo#mchansettings.value),
 			      Unbans = lists:foldl(fun(E, Acc) ->
 							   if E#ircban.time < Minage ->

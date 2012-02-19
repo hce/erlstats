@@ -153,7 +153,8 @@ parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall, TS) ->
 	{false, remove, $b} ->
 	    [Param|PRest] = Pall,
 	    List = Channel#ircchannel.bans,
-	    List_U = List -- [Param],
+	    List_U = [Elem || #ircban{banmask=BM}=Elem <- List,
+			      BM =/= Param],
 	    CU = Channel#ircchannel{bans=List_U},
 	    parsecmode_i(Operation, CU, MRest, PRest, TS);
 	{false, add, $e} ->
