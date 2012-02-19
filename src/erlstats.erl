@@ -730,6 +730,20 @@ irccmd(topic, State, Setter, [Channelname, Newtopic]) ->
     ?DEBUG("~s changed ~s's topic to ~s", [Setter, Channelname, Newtopic]),
     State;
 
+irccmd(bmask, State, Setter, [_TS, Channelname, <<"b">>, Masks]) ->
+    [Channel] = ets:lookup(State#state.channeltable, Channelname),
+    Bans = Channel#ircchannel.bans,
+    Bans_U = lists:foldl(fun(Banmask, Acc) ->
+				 [#ircban{time=esmisc:curtime(), %% Hack: use current time instead of TS, because *actually*, we need the real time these bans were set, the best approximation to that is the current time, not channel creation time.
+					  user=Setter,
+					  banmask=Banmask}|Acc]
+			 end, Bans, binary:split(Masks, <<" ">>, [global])),
+    Channel_U = Channel#ircchannel{
+		  bans=Bans_U
+		 },
+    ets:insert(State#state.channeltable, Channel_U),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~p with instigator ~p and params ~p", [Command, Instigator, Params]),
     State.
