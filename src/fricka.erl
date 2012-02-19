@@ -84,7 +84,7 @@ handle_cast(initialize, State) ->
 					    << "services.hackint.org" >>,
 					    << "Fricka" >>,
 					    << "Frech wacht Fricka ueber's HackINT" >>, ?MODULE}),
-    timer:send_interval(60, checkbans), %% Check for bans that we might want to remove every minute
+    timer:send_interval(60000, checkbans), %% Check for bans that we might want to remove every minute
     {noreply, State#state{frickauser=User}};
 handle_cast({irccmd, tmode, Params}, State) ->
     Channame = Params#irccmdtmode.channame,
