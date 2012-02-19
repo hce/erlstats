@@ -195,6 +195,7 @@ handle_call({irc_kill, Killer, Killee, Reason}, _From, State) ->
     Killername = (resolveuser(State, Killer))#ircuser.nick,
     ts6:sts_kill(State#state.socket, Killer, Killername, Killee, Reason),
     delfromntuidtable(State, Killee),
+    channel_handlequit(State, Killee),
     ets:delete(State#state.usertable, Killee),
     {reply, ok, State};
 
