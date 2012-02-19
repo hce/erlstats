@@ -688,7 +688,18 @@ irccmd(encap, State, _SourceSID, [_Targets, <<"CHANACS">>, Reference, <<"ACCESS"
     Return_PID ! {chanacs, Nickservuser, Channelname, Accessflags},
     ets:delete(State#state.referencetable, Reference),
     State;
-    
+
+irccmd(encap, State, _SourceSID, [_Targets, <<"CHANACS">>, Reference, Denied_reason]) ->
+    Denied_atom = case Denied_reason of
+		      <<"NO_ACCESS">> -> noaccess;
+		      <<"CHAN_NOT_REGISTERED">> -> nochannel;
+		      _Else -> unknown
+		  end,
+    [{Reference, Return_PID, Nickservuser, Channelname}] = 
+	ets:lookup(State#state.referencetable, Reference),
+    Return_PID ! {chanacs, Nickservuser, Channelname, Denied_atom},
+    ets:delete(State#state.referencetable, Reference),
+    State;       
 
 irccmd(away, State, UID, [Awaymsg]) ->
     case ets:lookup(State#state.usertable, UID) of

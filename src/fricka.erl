@@ -188,9 +188,14 @@ handle_cast({privmsg, fricka, I, autounban, User, [Channelname|_Maybesomething]}
 			_Somematch ->
 			    handle_cast_ap(Parms, State)
 		    end;
-		channotregistered ->
+		nochannel ->
 		    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
 					"Channel ~s is not registered with ChanServ.",
+					[Channelname]),
+		    {noreply, State};
+		noaccess ->
+		    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+					"You do not seem to be on ~s's access list.",
 					[Channelname]),
 		    {noreply, State};
 		_Else ->
