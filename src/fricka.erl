@@ -11,6 +11,8 @@
 
 -include("erlstats.hrl").
 
+-define(DEBUG, esmisc:log).
+
 %% API
 -export([start_link/0]).
 
@@ -82,6 +84,7 @@ handle_cast(initialize, State) ->
 					    << "services.hackint.org" >>,
 					    << "Fricka" >>,
 					    << "Frech wacht Fricka ueber's HackINT" >>, ?MODULE}),
+    timer:send_interval(60, checkbans), %% Check for bans that we might want to remove every minute
     {noreply, State#state{frickauser=User}};
 handle_cast({irccmd, tmode, Params}, State) ->
     Channame = Params#irccmdtmode.channame,
@@ -174,6 +177,13 @@ handle_cast({privmsg, fricka, I, cinfo, User, [Channelname]}, State) ->
     end,
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, fautounban, User, Furtherstuff}, State) ->
+    User_U = User#ircuser{
+	       authenticated={<< "000" >>, << "OPER_OVERRIDE" >>}
+	      },
+    Parms = {privmsg, fricka, I, autounban, User_U, Furtherstuff},
+    handle_cast_ap(Parms, State);
+
 handle_cast({privmsg, fricka, I, autounban, User, [Channelname|_Maybesomething]}=Parms, State) ->
     case User#ircuser.authenticated of
 	{_Authenticator, Nickservuser} ->
@@ -219,6 +229,32 @@ handle_cast(_Info, State) ->
 %%                                       {stop, Reason, State}
 %% Description: Handling all non call/cast messages
 %%--------------------------------------------------------------------
+handle_info(checkbans, State) ->
+    {ok, Channeltable} = gen_server:call(erlstats, getchanneltable),
+    ets:foldl(fun(Channel, _Ignore) ->
+		      ?DEBUG("Checkbans: ~p", [Channel]),
+		      Trans = fun() ->
+				      mnesia:read(mchansettings, {Channel#ircchannel.channame, autounban})
+			      end,
+		      case mnesia:transaction(Trans) of
+			  {atomic, [Autounbaninfo]} ->
+			      ?DEBUG("Checkbans: ~p ~p", [Channel, Autounbaninfo]),
+			      Minage = esmisc:curtime() - orddict:fetch(secstounban, Autounbaninfo#mchansettings.value),
+			      Unbans = lists:foldl(fun(E, Acc) ->
+							   if E#ircban.time < Minage ->
+								   [E#ircban.banmask|Acc];
+							      true -> Acc
+							   end
+						   end, [], Channel#ircchannel.bans),
+			      lists:foreach(fun(Banmask) ->
+						    erlstats:irc_cmode((State#state.frickauser)#ircuser.uid, Channel#ircchannel.channame, [<< "-b" >>, Banmask])
+					    end, Unbans);
+			  _Else ->
+			      ok
+		      end
+	      end, undefined, Channeltable),
+    {noreply, State};
+
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -246,7 +282,8 @@ cmdlist(fricka) ->
      wallop,
      uinfo,
      cinfo,
-     autounban
+     autounban,
+     fautounban
     ].
 
 cmdhelp(fricka, autounban) ->
@@ -266,6 +303,26 @@ cmdhelp(fricka, autounban) ->
 		     "    1d       86400 Seconds\n \n"
 		     "Examples:\n"
 		     "    /msg Fricka AUTOUNBAN #hackint 1d">>}
+    ];
+
+cmdhelp(fricka, fautounban) ->
+    [
+     {params,      []},
+     {shortdesc,   <<"Enable/Disable/Lookup AUTOUNBAN status on a channel">>},
+     {longdesc,    <<"\^bFricka\^b can automatically unban users in a channel\n"
+		     "after a certain amount of time if so requested by the channel\n"
+		     "owner.\n"
+		     "Oper Force variant.\n \n"
+		     "Syntax: FAUTOUNBAN #channel\n"
+		     "Syntax: FAUTOUNBAN #channel off\n"
+		     "Syntax: FAUTOUNBAN #channel DURATION\n \n"
+		     "Duration:\n"
+		     "    100      100 Seconds\n"
+		     "    5m       300 Seconds\n"
+		     "    1h       3600 Seconds\n"
+		     "    1d       86400 Seconds\n \n"
+		     "Examples:\n"
+		     "    /msg Fricka FAUTOUNBAN #hackint 1d">>}
     ];
 
 cmdhelp(fricka, whoami) ->
@@ -321,6 +378,9 @@ cmdhelp(fricka, cinfo) ->
 
 cmdperm(fricka, autounban) ->
     []; %% No permission required
+
+cmdperm(fricka, fautounban) ->
+    $o; %% Operators only
 
 cmdperm(fricka, whoami) ->
     []; %% No permission required

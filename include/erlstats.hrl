@@ -65,6 +65,10 @@
 		      ts,
 		      channame,
 		      modechanges}).
+
+-record(ircban, {time,
+		 user,
+		 banmask}).
 		 
 -record(blacklistentry, {ip,
 			 expirytime,
