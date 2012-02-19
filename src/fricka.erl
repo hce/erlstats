@@ -247,7 +247,10 @@ handle_info(checkbans, State) ->
 							   end
 						   end, [], Channel#ircchannel.bans),
 			      lists:foreach(fun(Banmask) ->
-						    erlstats:irc_cmode((State#state.frickauser)#ircuser.uid, Channel#ircchannel.channame, [<< "-b" >>, Banmask])
+						    erlstats:irc_cmode((State#state.frickauser)#ircuser.uid,
+								       Channel#ircchannel.channame, [<< "-b" >>, Banmask]),
+						    error_logger:info_msg("Fricka auto-unban: ~s -b ~s",
+									  [Channel#ircchannel.channame, Banmask])
 					    end, Unbans);
 			  _Else ->
 			      ok
