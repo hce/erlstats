@@ -255,8 +255,10 @@ handle_cast({irccmd_notice, Noticer, Noticee, Notice}, State) ->
 		   Noticer, Noticee, Notice),
     {noreply, State};
 
-handle_cast({irccmd_encap_chanacs, Nickservuser, Channelname}, State) ->
+handle_cast({irccmd_encap_chanacs, Return_PID, Nickservuser, Channelname}, State) ->
     Reference = iolist_to_binary(io_lib:format("~p", [make_ref()])),
+    ets:insert(State#state.referencetable,
+	       [{Reference, Return_PID, Nickservuser, Channelname}]),
     ts6:sts_encap(State#state.socket,
 		  State#state.sid,
 		  <<"services.hackint.org">>,
@@ -326,7 +328,7 @@ irc_notice(Noticer, Noticee, Notice, Format_params) ->
 			       io_lib:format(Notice, Format_params)}).
 
 irc_get_chanacs(Nickservuser, Channelname) ->
-    gen_server:cast(erlstats, {irccmd_encap_chanacs, Nickservuser, Channelname}),
+    gen_server:cast(erlstats, {irccmd_encap_chanacs, self(), Nickservuser, Channelname}),
     receive
 	{chanacs, Nickservuser, Channelname, Accessflags} ->
 	    {ok, Accessflags}
@@ -681,7 +683,7 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     State;
 
 irccmd(encap, State, _SourceSID, [_Targets, <<"CHANACS">>, Reference, <<"ACCESS">>, Accessflags]) ->
-    [{Return_PID, Nickservuser, Channelname}] = 
+    [{Reference, Return_PID, Nickservuser, Channelname}] = 
 	ets:lookup(State#state.referencetable, Reference),
     Return_PID ! {chanacs, Nickservuser, Channelname, Accessflags},
     ets:delete(State#state.referencetable, Reference),
