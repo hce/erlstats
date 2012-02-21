@@ -32,6 +32,11 @@
 	 logger/2
 	]).
 
+%% For hot code swapping
+-export([
+	 logger/1
+	]).
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -298,7 +303,7 @@ logger(F) ->
     receive
 	{log, Stuff} ->
 	    ok = disk_log:blog(F, [integer_to_list(curtime()), <<" ">>, Stuff, 10]),
-	    logger(F);
+	    ?MODULE:logger(F);
 	Else ->
 	    error_logger:info_msg("Unknown log message ~p!", [Else])
     end.
