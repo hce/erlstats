@@ -642,6 +642,7 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
     S = State#state.socket,
     ME = State#state.me,
     Hostname = ME#ircserver.hostname,
+    ?DEBUG("WHOIS from ~s for ~s.", [Inquirer, Inquirednick]),
     case find_plugin_user(State, Inquirednick) of
 	user_not_found ->
 	    ts6:sts_whoisnotfound(S, Hostname, Inquirer,
