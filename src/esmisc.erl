@@ -67,7 +67,7 @@ parseumode(_Operation, Curmodes, << >>) ->
 parsecmode(Channel, TS, TSModus, Modes) ->
     Channel_U = case {(TS < Channel#ircchannel.ts), TSModus} of
 		    {true, normal} ->
-			esmisc:log("Channel TS was lowered."),
+			esmisc:log("Channel TS of ~s was lowered.", [Channel#ircchannel.channame]),
 			Channel#ircchannel{
 			  modes=[],
 			  bans=[],
