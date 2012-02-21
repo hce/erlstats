@@ -389,7 +389,7 @@ irccmd(pong, State, _Someone, _Someparams) ->
     ?DEBUG("~p replied to our PING: ~p", [_Someone, _Someparams]),
     if
 	State#state.burst ->
-	    error_logger:info_msg("Synchronized with network."),
+	    ?DEBUG("Synchronized with network."),
 	    State#state{burst=false};
 	true ->
 	    State
@@ -463,10 +463,10 @@ irccmd(quit, State, Quitter, [_Reason]) ->
 irccmd(pass, State, [], [RemotePassword, TS, TS_Version, Uplink_UID]) ->
     if
 	State#state.remotepassword =/= RemotePassword ->
-	    error_logger:info_msg("Server ~p authenticated with the wrong password!", [Uplink_UID]),
+	    ?DEBUG("Server ~p authenticated with the wrong password!", [Uplink_UID]),
 	    exit(error); %% Let OTP restart us or whatever :-)
 	true ->
-	    error_logger:info_msg("Server ~p correctly authenticated with us.", [Uplink_UID])
+	    ?DEBUG("Server ~p correctly authenticated with us.", [Uplink_UID])
     end,
     ?DEBUG("TS params of server: ~p ~p",
 			  [TS, TS_Version]),
@@ -490,7 +490,7 @@ irccmd(server, State, [], [ServerHostname, Hops, ServerDescription]) ->
       description=ServerDescription,
       uplink=undefined % Direct connection
      },
-    error_logger:info_msg("New IRC server: ~p", [Server]),
+    ?DEBUG("New IRC server: ~p", [Server]),
     ets:insert(State#state.servertable, Server),
     State;
 
@@ -503,14 +503,14 @@ irccmd(sid, State, Uplink, [Servername, Hops, SID, Serverdescription]) ->
       description=Serverdescription,
       uplink=Uplink
      },
-    error_logger:info_msg("New IRC server: ~p", [Server]),
+    ?DEBUG("New IRC server: ~p", [Server]),
     ets:insert(State#state.servertable, Server),
     State;
 
 irccmd(squit, State, [], [SID, Reason]) ->
     Affected_servers = serversbehind(State, SID),
     Affected_users = usersaffected(State, Affected_servers),
-    error_logger:info_msg("Server ~p split, reason: ~p. Affected servers: ~p. Affected users: ~p",
+    ?DEBUG("Server ~p split, reason: ~p. Affected servers: ~p. Affected users: ~p",
 			  [SID, Reason, Affected_servers,
 			   length(Affected_users)]),
     lists:foreach(fun(E) ->
@@ -642,7 +642,7 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
     S = State#state.socket,
     ME = State#state.me,
     Hostname = ME#ircserver.hostname,
-    ?DEBUG("WHOIS from ~s for ~s.", [Inquirer, Inquirednick]),
+    ?DEBUG("WHOIS from ~s for ~s.", [maybeusernick(State, Inquirer), Inquirednick]),
     case find_plugin_user(State, Inquirednick) of
 	user_not_found ->
 	    ts6:sts_whoisnotfound(S, Hostname, Inquirer,
@@ -663,9 +663,9 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
 irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     case ets:lookup(State#state.usertable, UID) of
 	[] ->
-	    error_logger:info_msg("Error: ~p reports ~p authenticated as ~p, "
-				  "but ~p is not in our user table! (anymore?)",
-				  [SourceSID, UID, Accountname, UID]);
+	    ?DEBUG("Error: ~p reports ~p authenticated as ~p, "
+		   "but ~p is not in our user table! (anymore?)",
+		   [SourceSID, UID, Accountname, UID]);
 	[User] ->
 	    ?DEBUG("~s authenticates ~s as ~s",
 		   [SourceSID, UID, Accountname]),
@@ -998,6 +998,7 @@ check_command_permission(Pluginmodule, Nickname,
 		    Result;
 		Else ->
 		    error_logger:info_msg("Erraneous result of permission checking function: ~p", [Else]),
+		    ?DEBUG("Erraneous result of permission checking function: ~p", [Else]),
 		    false
 	    catch _:_ ->
 		    false
@@ -1006,6 +1007,7 @@ check_command_permission(Pluginmodule, Nickname,
 	    is_tuple(Command_giver#ircuser.authenticated);
 	Else2 ->
 	    error_logger:info_msg("Invalid permission function return value: ~p", [Else2]),
+	    ?DEBUG("Invalid permission function return value: ~p", [Else2]),
 	    false
     catch _:_ ->
 	    command_does_not_exist
@@ -1099,11 +1101,18 @@ channel_handlequit(State, UID) ->
 		  end, 0, User#ircuser.channels),
     ?DEBUG("User ~s quit; removed them from ~p channel(s).", [User#ircuser.nick, C]).
 
-delfromntuidtable(State, Nick) ->			    
-    case ets:lookup(State#state.usertable, Nick) of
+delfromntuidtable(State, UID) ->			    
+    case ets:lookup(State#state.usertable, UID) of
 	[User] ->
 	    ets:delete(State#state.ntuidtable, User#ircuser.nick);
 	_Else ->
 	    ok
     end.
 
+maybeusernick(State, UID) ->
+    case ets:lookup(State#state.usertable, UID) of
+	[User] ->
+	    User#ircuser.nick;
+	[] ->
+	    UID
+    end.

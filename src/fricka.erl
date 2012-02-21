@@ -98,7 +98,7 @@ handle_cast({irccmd, tmode, Params}, State) ->
 	    erlstats:irc_notice((State#state.frickauser)#ircuser.uid,
 				Params#irccmdtmode.issuer,
 				<< "HackINT does not support HalfOP. Please do not use them. ChanServ offers a very granular permission system, see \^b/msg chanserv help flags\^b for details or ask in \^b#hackint\^b" >>),
-	    error_logger:info_msg("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]);
+	    ?DEBUG("Nicks to unhalfop: ~p", [Nicks_to_unhalfop]);
 	true ->
 	    ok
     end,
@@ -249,8 +249,8 @@ handle_info(checkbans, State) ->
 			      lists:foreach(fun(Banmask) ->
 						    erlstats:irc_cmode((State#state.frickauser)#ircuser.uid,
 								       Channel#ircchannel.channame, [<< "-b" >>, Banmask]),
-						    error_logger:info_msg("Fricka auto-unban: ~s -b ~s",
-									  [Channel#ircchannel.channame, Banmask])
+						    ?DEBUG("Fricka auto-unban: ~s -b ~s",
+							   [Channel#ircchannel.channame, Banmask])
 					    end, Unbans);
 			  _Else ->
 			      ok
