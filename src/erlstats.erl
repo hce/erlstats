@@ -667,8 +667,6 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
 		   "but ~p is not in our user table! (anymore?)",
 		   [SourceSID, UID, Accountname, UID]);
 	[User] ->
-	    ?DEBUG("~s authenticates ~s as ~s",
-		   [SourceSID, UID, Accountname]),
 	    User_U = User#ircuser{authenticated={SourceSID, Accountname}},
 	    ets:insert(State#state.usertable, User_U)
     end,
