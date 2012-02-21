@@ -280,14 +280,24 @@ log(S, F) ->
     logger ! {log, R}.
 
 logger(init, Logfile) ->
-    {ok, F} = file:open(Logfile, [write]),
+    %% {ok, F} = file:open(Logfile, [write]),
+    {ok, F} = disk_log:open([{name, erlstats},
+			     {file, Logfile},
+			     {linkto, self()},
+			     %% {repair, true},
+			     {type, wrap},
+			     {format, external},
+			     {size, {10240, 3}},  %% three 10kbyte files
+			     {distributed, []},
+			     {notify, false},
+			     {head, [<<"HC's erlstats. Logfile opened at ">>, integer_to_list(curtime()), <<"\n">>]},
+			     {mode, read_write}]),			     
     logger(F).
 
 logger(F) ->
     receive
 	{log, Stuff} ->
-	    ok = file:write(F, Stuff),
-	    ok = file:write(F, << "\n" >>),
+	    ok = disk_log:blog(F, [integer_to_list(curtime()), <<" ">>, Stuff, 10]),
 	    logger(F);
 	Else ->
 	    error_logger:info_msg("Unknown log message ~p!", [Else])
