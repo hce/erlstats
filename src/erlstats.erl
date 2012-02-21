@@ -732,6 +732,12 @@ irccmd(bmask, State, Setter, [_TS, Channelname, <<"b">>, Masks]) ->
     ets:insert(State#state.channeltable, Channel_U),
     State;
 
+irccmd(error, State, Instigator, Params) ->
+    ?DEBUG("Got ERROR.~n    Instigator: ~p~n    Params: ~p~n    State: ~p",
+	   [Instigator, Params, State]),
+    exit(irc_error),
+    State;
+
 irccmd(Command, State, Instigator, Params) ->
     ?DEBUG("Unknown command ~s with instigator ~s and params ~p", [Command, Instigator, Params]),
     State.
