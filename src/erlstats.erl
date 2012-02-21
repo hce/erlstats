@@ -445,6 +445,7 @@ irccmd(kill, State, Killer, [Killee, Reason]) ->
     MYSID = (State#state.me)#ircserver.sid,
     Lookitupfirst = ets:lookup(State#state.usertable, Killee),
     delfromntuidtable(State, Killee),
+    channel_handlequit(State, Killee),
     ets:delete(State#state.usertable, Killee),
     Newstate = case Lookitupfirst of
 		   [#ircuser{sid=MYSID}=User] ->
