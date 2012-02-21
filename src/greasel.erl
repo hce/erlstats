@@ -29,6 +29,8 @@
 	  torlistdb
 	 }).
 
+-define(DEBUG, esmisc:log).
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -92,11 +94,10 @@ handle_cast(initialize, State) ->
 					   << "IRC Security Greasel" >>, ?MODULE}),
     {noreply, State#state{greaseluser=User}};
 
-handle_cast({irccmd, uid, #irccmduid{burst=true}=Params}, State) ->
-    esmisc:log("New user during burst - not checking ~p", [Params#irccmduid.ip]),
+handle_cast({irccmd, uid, #irccmduid{burst=true}=_Params}, State) ->
+    %% Do not check users against BL during burst
     {noreply, State};
 handle_cast({irccmd, uid, #irccmduid{burst=false}=Params}, State) ->
-    esmisc:log("New user - need to check host ~p", [Params#irccmduid.ip]),
     Newstate = check_blacklist(State, Params),
     {noreply, Newstate};
 
@@ -146,9 +147,9 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 handle_info(purgeoldentries, State) ->
     Count1 = purgeoldentries(State#state.blacklistdb),
-    error_logger:info_msg("Purged ~p entries from the blacklist DB.", [Count1]),
+    ?DEBUG("Purged ~p entries from the blacklist DB.", [Count1]),
     Count2 = purgeoldentries(State#state.torlistdb),
-    error_logger:info_msg("Purged ~p entries from the tor DB.", [Count2]),
+    ?DEBUG("Purged ~p entries from the tor DB.", [Count2]),
     {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -235,7 +236,6 @@ checkblacklist(lookup, IP) ->
 		   Else
 	   end,
     Hosttocheck = binary_to_list(iolist_to_binary(IP_2)) ++ ".rbl.efnetrbl.org.",
-    esmisc:log("Resolving ~s", [Hosttocheck]),
     case inet:getaddr(Hosttocheck, inet) of
 	{ok, {_, _, _, 4}} ->
 	    false; %% TOR
@@ -256,7 +256,6 @@ checkblacklist(DB, IP) ->
     Curtime = esmisc:curtime(),
     case ets:lookup(DB, IP) of
 	[Entry] when Entry#blacklistentry.expirytime > Curtime ->
-	    esmisc:log("HIT for IP ~p", [IP]),
 	    Entry#blacklistentry.result;
 	_Else ->
 	    Result = checkblacklist(check, IP),
@@ -266,7 +265,6 @@ checkblacklist(DB, IP) ->
 	      result=Result
 	     },
 	    ets:insert(DB, Entry),
-	    esmisc:log("Added a new cache entry for IP ~p", [IP]),
 	    Result
     end.
 
@@ -278,7 +276,6 @@ checktorlist(lookup, IP) ->
 		   Else
 	   end,
     Hosttocheck = binary_to_list(iolist_to_binary(IP_2)) ++ ".tor.dnsbl.sectoor.de.",
-    esmisc:log("Resolving ~s", [Hosttocheck]),
     case inet:getaddr(Hosttocheck, inet) of
 	{ok, {_, _, _, 1}} ->
 	    true;  %% Tor
@@ -298,7 +295,6 @@ checktorlist(DB, IP) ->
     Curtime = esmisc:curtime(),
     case ets:lookup(DB, IP) of
 	[Entry] when Entry#blacklistentry.expirytime > Curtime ->
-	    esmisc:log("HIT for IP ~p", [IP]),
 	    Entry#blacklistentry.result;
 	_Else ->
 	    Result = checktorlist(check, IP),
@@ -308,7 +304,6 @@ checktorlist(DB, IP) ->
 	      result=Result
 	     },
 	    ets:insert(DB, Entry),
-	    esmisc:log("Added a new cache entry for IP ~p", [IP]),
 	    Result
     end.
 
@@ -337,24 +332,21 @@ check_blacklist(State, Params) ->
 			       << "To resolve your K-Line-issue, please send a mail "
 				  "klines@hackint.org with details about your IP and so forth." >>);
 	false ->
-	    esmisc:log("New user ~s!~s@~s (~p) is not blacklistsed.", [Params#irccmduid.nick,
-								       Params#irccmduid.ident,
-								       Params#irccmduid.hostname,
-								       Params#irccmduid.gecos])
+	    ok
     end,
     case checktorlist(State#state.torlistdb,
 		      Params#irccmduid.ip) of
 	true ->
 	    erlstats:irc_notice((State#state.greaseluser)#ircuser.uid,
 				Params#irccmduid.uid,
-				[<< "You are welcome to connect via tor, but this is not the recommended way of doing things. Please read \^bhttp://blog.hackint.eu/blog/display?id=19\^b" >>]),
-	    esmisc:log("New user ~s!~s@~s *is* connecting via tor.", [Params#irccmduid.nick,
-									Params#irccmduid.ident,
-									Params#irccmduid.hostname]);
+				[<< "You are welcome to connect via tor, but it is recommended you use our Tor hidden service. Please read \^bhttp://blog.hackint.eu/blog/display?id=19\^b" >>]),
+	    esmisc:log("New user ~s!~s@~s *is* connecting via tor; "
+		       "sending them a warning message to use our "
+		       "Tor hidden service.", [Params#irccmduid.nick,
+					       Params#irccmduid.ident,
+					       Params#irccmduid.hostname]);
 	false ->
-	    esmisc:log("New user ~s!~s@~s is not connecting via tor.", [Params#irccmduid.nick,
-									Params#irccmduid.ident,
-									Params#irccmduid.hostname])
+	    ok
     end,
 
     State.
