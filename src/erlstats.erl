@@ -1076,10 +1076,9 @@ channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
 			  case dict:size(Channel_U#ircchannel.users) of
 			      0 ->
 				  ets:delete(State#state.channeltable, Channelname),
-				  ?DEBUG("Channel PART destroys channel ~p.", [Channelname]);
+				  ?DEBUG("Channel PART destroys channel ~s.", [Channelname]);
 			      _Else ->
-				  ets:insert(State#state.channeltable, Channel_U),
-				  ?DEBUG("~s got removed from ~s", [ICU#ircchanuser.uid, Channelname])
+				  ets:insert(State#state.channeltable, Channel_U)				  
 			  end,
 			  
 			  [User] = ets:lookup(UT, UID),
@@ -1094,11 +1093,10 @@ channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
 channel_handlequit(State, UID) ->
     [User] = ets:lookup(State#state.usertable, UID),
     User_R = [#ircchanuser{uid=UID}],
-    C = sets:fold(fun(Channelname, Count) ->
-			  channel_removeusers(State, User_R, Channelname),
-			  Count + 1
-		  end, 0, User#ircuser.channels),
-    ?DEBUG("User ~s quit; removed them from ~p channel(s).", [User#ircuser.nick, C]).
+    _C = sets:fold(fun(Channelname, Count) ->
+			   channel_removeusers(State, User_R, Channelname),
+			   Count + 1
+		   end, 0, User#ircuser.channels).
 
 delfromntuidtable(State, UID) ->			    
     case ets:lookup(State#state.usertable, UID) of
