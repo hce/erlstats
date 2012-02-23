@@ -164,6 +164,31 @@ handle_cast({privmsg, fricka, I, uinfo, User, [Usernick]}, State) ->
     end,
     {noreply, State};
 
+handle_cast({privmsg, fricka, I, nicktouid, User, [Usernick]}, State) ->
+    case gen_server:call(erlstats, {getuserfromnick, Usernick}) of
+	{ok, [User_R]} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("UID of ~s is ~s.",
+					      [Usernick, User_R#ircuser.uid]));
+	{ok, []} ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("User ~s does not seem to exist.", [Usernick]))
+    end,
+    {noreply, State};
+
+handle_cast({privmsg, fricka, I, uidtonick, User, [UserUID]}, State) ->
+    {ok, Usertable} = gen_server:call(erlstats, getusertable),
+    case ets:lookup(Usertable, UserUID) of
+	[LookedupUser] ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				"UID ~s is currently using nick ~s.",
+				[UserUID, LookedupUser#ircuser.nick]);
+	[] ->
+	    erlstats:irc_notice(I#ircuser.uid, User#ircuser.uid,
+				io_lib:format("UID ~s does not seem to exist.", [UserUID]))
+    end,
+    {noreply, State};
+
 handle_cast({privmsg, fricka, I, cinfo, User, [Channelname]}, State) ->
     {ok, Channeltable} = gen_server:call(erlstats, getchanneltable),
     case ets:lookup(Channeltable, Channelname) of
@@ -286,7 +311,9 @@ cmdlist(fricka) ->
      uinfo,
      cinfo,
      autounban,
-     fautounban
+     fautounban,
+     nicktouid,
+     uidtonick
     ].
 
 cmdhelp(fricka, autounban) ->
@@ -371,6 +398,27 @@ cmdhelp(fricka, cinfo) ->
 		   "Examples:\n"
 		   "    /msg Fricka CINFO #ircnets\n"
 		   "    /msg Fricka CINFO #hackint">>}
+    ];
+cmdhelp(fricka, uidtonick) ->
+    [
+     {params,    []},
+     {shortdesc, <<"Give the nick to a certain UID">>},
+     {longdesc,  <<"Give the current nick of the user with the uid UID\n \n"
+		   "Syntax: UIDTONICK UID\n \n"
+		   "Examples:\n"
+		   "    /msg Fricka UIDTONICK 0WAFRICKA\n"
+		   "    /msg Fricka UIDTONICK 0WAGREASL">>}
+    ];
+cmdhelp(fricka, nicktouid) ->
+    [
+     {params,    []},
+     {shortdesc, <<"Give the UID to a certain nick">>},
+     {longdesc,  <<"Give the UID of the user with the nick NICK\n"
+		   "Nicks are case sensitive!\n \n"
+		   "Syntax: NICKTOUID NICK\n \n"
+		   "Examples:\n"
+		   "    /msg Fricka NICKTOUID fricka\n"
+		   "    /msg Fricka NICKTOUID greasel">>}
     ].
 
 cmdperm(fricka, autounban)   -> [];
@@ -379,7 +427,9 @@ cmdperm(fricka, whoami)      -> [];
 cmdperm(fricka, info)        -> [];
 cmdperm(fricka, wallop)      -> $o;
 cmdperm(fricka, uinfo)       -> $o;
-cmdperm(fricka, cinfo)       -> $o.
+cmdperm(fricka, cinfo)       -> $o;
+cmdperm(fricka, uidtonick)   -> $o;
+cmdperm(fricka, nicktouid)   -> $o.
 
 cmdgenericinfo(fricka) ->
     <<
