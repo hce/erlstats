@@ -307,7 +307,6 @@ cmdhelp(fricka, autounban) ->
 		     "Examples:\n"
 		     "    /msg Fricka AUTOUNBAN #hackint 1d">>}
     ];
-
 cmdhelp(fricka, fautounban) ->
     [
      {params,      []},
@@ -327,7 +326,6 @@ cmdhelp(fricka, fautounban) ->
 		     "Examples:\n"
 		     "    /msg Fricka FAUTOUNBAN #hackint 1d">>}
     ];
-
 cmdhelp(fricka, whoami) ->
     [
      {params,      []},
@@ -336,7 +334,6 @@ cmdhelp(fricka, whoami) ->
 		     "should be aware of that fact. With this command you can "
 		     "find out if she actually is.">>}
     ];
-
 cmdhelp(fricka, info) ->
     [
      {params,     []},
@@ -345,7 +342,6 @@ cmdhelp(fricka, info) ->
 		    "quite a bit about hackint's inhabitants. With this command you\n"
 		    "can find out what information she has on you.">>}
     ];
-
 cmdhelp(fricka, wallop) ->
     [
      {params,    []},
@@ -356,7 +352,6 @@ cmdhelp(fricka, wallop) ->
 		   "Examples:\n"
 		   "    /msg Fricka WALLOP Hi all, try out our new channel mode +S">>}
     ];
-
 cmdhelp(fricka, uinfo) ->
     [
      {params,    []},
@@ -367,7 +362,6 @@ cmdhelp(fricka, uinfo) ->
 		   "    /msg Fricka UINFO hc\n"
 		   "    /msg Fricka UINFO fricka">>}
     ];
-
 cmdhelp(fricka, cinfo) ->
     [
      {params,    []},
@@ -379,26 +373,13 @@ cmdhelp(fricka, cinfo) ->
 		   "    /msg Fricka CINFO #hackint">>}
     ].
 
-cmdperm(fricka, autounban) ->
-    []; %% No permission required
-
-cmdperm(fricka, fautounban) ->
-    $o; %% Operators only
-
-cmdperm(fricka, whoami) ->
-    []; %% No permission required
-
-cmdperm(fricka, info) ->    
-    []; %% No permission required
-
-cmdperm(fricka, wallop) ->
-    $o; %% Operators only
-
-cmdperm(fricka, uinfo) ->
-    $o; %% Operators only
-
-cmdperm(fricka, cinfo) ->
-    $o. %% Operators only
+cmdperm(fricka, autounban)   -> [];
+cmdperm(fricka, fautounban)  -> $o;
+cmdperm(fricka, whoami)      -> [];
+cmdperm(fricka, info)        -> [];
+cmdperm(fricka, wallop)      -> $o;
+cmdperm(fricka, uinfo)       -> $o;
+cmdperm(fricka, cinfo)       -> $o.
 
 cmdgenericinfo(fricka) ->
     <<
