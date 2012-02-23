@@ -18,7 +18,12 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--record(state, {timer}).
+-record(state, {timer,
+		listenprocesses,
+		curdata}).
+
+%% Hot code swapping / servers
+-export([doaccept/3]).
 
 %%====================================================================
 %% API
@@ -56,6 +61,9 @@ init([]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
+handle_call(get_stats, _From, State) ->
+    {reply, {ok, State#state.curdata}, State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -68,8 +76,11 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast(initialize, State) ->
     Timer = timer:send_interval(120000, update_stats),
+    LP = listenprocesses(self()),
     {noreply, State#state{
-       timer=Timer
+		timer=Timer,
+		listenprocesses=LP,
+		curdata=orddict:new()
       }};
 
 handle_cast(_Msg, State) ->
@@ -84,10 +95,9 @@ handle_cast(_Msg, State) ->
 handle_info(update_stats, State) ->
     {ok, Usertable} = gen_server:call(erlstats, getusertable),
     {ok, Servertable} = gen_server:call(erlstats, getservertable),
+    Newdict = handle_stats(Usertable, Servertable, State#state.curdata),
+    {noreply, State#state{curdata=Newdict}};
 
-    handle_stats(Usertable, Servertable),
-
-    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -112,10 +122,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 handle_stats(Usertable,
-	     Servertable) ->
-    {ok, F_config} = file:open("priv/ircstats.conf_new", [write]),
-    {ok, F_stats}  = file:open("priv/ircstats.data_new", [write]),
-    
+	     Servertable,
+	     Orddict) ->
     {Stats, Totalusers} = ets:foldl(fun(User, {Dict, Total}) ->
 					    SID = User#ircuser.sid,
 					    UID = User#ircuser.uid,
@@ -130,43 +138,69 @@ handle_stats(Usertable,
 
     
 
-    file:write(F_config, << "graph_category irc", 10,
-			    "graph_args -l 0", 10,
-			    "graph_title hackint.org User stats", 10,
-			    "graph_vlabel users", 10 >>),
-
     Totalusers_B = list_to_binary(integer_to_list(Totalusers)),
 
-    dict:fold(fun(SID, UIDs, A) ->
-		      Length_B = list_to_binary(integer_to_list(length(UIDs))),
-		      FON = if A == first -> << "AREA" >>;
-			       true -> << "STACK" >> end,
-		      [Server] = ets:lookup(Servertable, SID),
-		      SID_n = Server#ircserver.hostname,
-		      SID_h = hashit(SID_n),
-		      file:write(F_config, << SID_h/binary, ".draw ",
-					      FON/binary, 10,
-					      SID_h/binary, ".label ", SID_n/binary, 10 >>),
-		      file:write(F_stats, << SID_h/binary, ".value ",
-					     Length_B/binary, 10 >>),
-		      notfirst
-	      end, first, Stats),
+    {_, A_Config, A_Stats} =
+	dict:fold(fun(SID, UIDs, {A, IOList_C, IOList_S}) ->
+			  Length_B = list_to_binary(integer_to_list(length(UIDs))),
+			  FON = if A == first -> << "AREA" >>;
+				   true -> << "STACK" >> end,
+			  [Server] = ets:lookup(Servertable, SID),
+			  SID_n = Server#ircserver.hostname,
+			  SID_h = hashit(SID_n),
+			  F_config = << SID_h/binary, ".draw ",
+					FON/binary, 10,
+					SID_h/binary, ".label ", SID_n/binary, 10 >>,
+			  F_stats = << SID_h/binary, ".value ",
+				       Length_B/binary, 10 >>,
+			  {notfirst, IOList_C ++ [F_config], IOList_S ++ [F_stats]}
+		  end, {first, [], []}, Stats),
 
-    file:write(F_stats, << "total.value ", Totalusers_B/binary, 10 >>),
-    file:write(F_config, << "total.draw LINE2", 10,
-			    "total.label Total users", 10 >>),
+    Buf_data   = [A_Stats,
+		  << "total.value ", Totalusers_B/binary, 10 >>],
+    Buf_config = [<< "graph_category irc", 10,
+		     "graph_args -l 0", 10,
+		     "graph_title hackint.org User stats", 10,
+		     "graph_vlabel users", 10 >>,
+		  A_Config,
+		  << "total.draw LINE2", 10,
+		     "total.label Total users", 10 >>],
     
-
-    file:close(F_config),
-    file:close(F_stats),
-    
-    file:rename("priv/ircstats.conf_new", "priv/ircstats.conf"),
-    file:rename("priv/ircstats.data_new", "priv/ircstats.data").
-
+    OD1 = orddict:store(data, Buf_data, Orddict),
+    orddict:store(config, Buf_config, OD1).
 
 hashit(N) ->
     <<R:32, _/binary>> = crypto:sha(N),
     <<RB/binary>> = <<R:32>>,
     iolist_to_binary(hex:list_to_hex(binary_to_list(RB))).
 
-    
+
+listenprocesses(Handlingserver) ->    
+    Options = [binary, {ip, {127, 0, 0, 1}},
+	       {active, false},
+	       {packet, raw},
+	       inet, {reuseaddr, true}],
+    {ok, LS}  = gen_tcp:listen(9182, Options),
+    {ok, LS2} = gen_tcp:listen(9183, Options),
+    Configserver = spawn_link(?MODULE, doaccept, [config, LS, Handlingserver]),
+    Dataserver   = spawn_link(?MODULE, doaccept, [data, LS2, Handlingserver]),
+    [{configserver, Configserver},
+     {dataserver, Dataserver}].
+
+doaccept(What, LS, Handlingserver) ->
+    case gen_tcp:accept(LS) of
+	{ok, CS} ->
+	    spawn(fun() ->
+			  {ok, Stuff} = gen_server:call(Handlingserver, get_stats),
+			  case orddict:find(What, Stuff) of
+			      {ok, Val} ->
+				  gen_tcp:send(CS, Val);
+			      _Else ->
+				  gen_tcp:send(CS, << "Come back later" >>)
+			  end,
+			  gen_tcp:close(CS)
+		  end);
+	_Else ->
+	    ok
+    end,
+    ?MODULE:doaccept(What, LS, Handlingserver).    

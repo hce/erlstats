@@ -53,14 +53,14 @@ init([]) ->
 			     ]
 			    ]
 		},
-	      permanent,2000,worker,['erlstats']},
+	      permanent,20,worker,['erlstats']},
     
     Plugins = {'Plugins',
 	       {'erlstats_plugins_supervisor',
 		start_link,[
 			   ]
 	       },
-	       permanent,2000,worker,['erlstats_plugins_supervisor']},
+	       permanent,20,supervisor,['erlstats_plugins_supervisor']},
 
     {ok,{{one_for_all,0,1}, [Erlstats, Plugins]}}.
 
