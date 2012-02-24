@@ -611,7 +611,9 @@ irccmd(part, State, UID, [Channelname|_Perhapsreason]) ->
 
 irccmd(kick, State, Kicker, [Channelname, Kickee, Reason|_Else]) ->
     channel_removeusers(State, [#ircchanuser{uid=Kickee}], Channelname),
-    ?DEBUG("~s Kicked ~s from ~s (~s)", [Kicker, Kickee, Channelname, Reason]),
+    ?DEBUG("~s Kicked ~s from ~s (~s)", [maybeusernick(State, Kicker),
+					 maybeusernick(State, Kickee),
+					 Channelname, Reason]),
     State;
 
 irccmd(tmode, State, Issuer, [TS, Channame|Modestring]) ->
