@@ -1078,7 +1078,8 @@ channel_removeusers(#state{usertable=UT}=State, Users, Channelname) ->
 			  case dict:size(Channel_U#ircchannel.users) of
 			      0 ->
 				  ets:delete(State#state.channeltable, Channelname),
-				  ?DEBUG("Channel PART destroys channel ~s.", [Channelname]);
+				  ?DEBUG("Channel PART (~s) destroys channel ~s.",
+					 [maybeusernick(State, UID), Channelname]);
 			      _Else ->
 				  ets:insert(State#state.channeltable, Channel_U)				  
 			  end,
