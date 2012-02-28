@@ -439,9 +439,9 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
 
 irccmd(kill, State, Killer, [Killee, Reason]) ->
     ?DEBUG("Received KILL for ~s from ~s (Reason ~s)",
-			  [(resolveuser(State, Killee))#ircuser.nick,
-			   (resolveuser(State, Killer))#ircuser.nick,
-			   Reason]),
+	   [maybeusernick(State, Killee),
+	    maybeusernick(State, Killer),
+	    Reason]),
     MYSID = (State#state.me)#ircserver.sid,
     Lookitupfirst = ets:lookup(State#state.usertable, Killee),
     delfromntuidtable(State, Killee),
