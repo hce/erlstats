@@ -19,6 +19,7 @@
 		  realname,
 		  channels,
 		  away,
+		  realhost,
 		  authenticated,
 		  serverdata}).
 
@@ -56,6 +57,7 @@
 			 modes,
 			 ident,
 			 hostname,
+			 realhostname,
 			 ip,
 			 uid,
 			 gecos}).

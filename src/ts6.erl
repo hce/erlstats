@@ -42,7 +42,7 @@ sts_login(S, SID, Nodename, Password, Node_Description) ->
 		      "PASS ", Password/binary, " TS 6 :", SID/binary, 10,
 		      "CAPAB :QS EX IE KLN UNKLN ENCAP TB SERVICES HOPS EUID EOPMOD TBURST HUB EOB", 10,
 		      "SERVER ", Nodename/binary, " 1 :", Node_Description/binary, 10,
-		      "SVINFO 5 5 0 :", Curtime/binary, 10
+		      "SVINFO 6 0 0 :", Curtime/binary, 10
 		    >>).
 
 sts_pong(S, Pongparam) ->

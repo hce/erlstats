@@ -168,7 +168,7 @@ handle_call({register_user, NID, Nick, Ident, Host, Gecos, MiscDescription, Sour
       nick=Nick,
       hop=0,    % Our own
       ts=1337,  % Some time definitely lower than any real user, so we always have precedence
-      modes="", % No modes for our user
+      modes="oiSD", % No modes for our user
       ident=Ident,
       host=Host,
       ip= << "127.0.0.1" >>,
@@ -279,6 +279,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     Len = size(Data) - 2,  % Substract the length of \r\n
     << Data_wr:Len/binary, _CRLF/binary >> = Data,
 
+io:format(":: ~s~n", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_atom = case esmisc:atomorunknown(Command) of
@@ -409,6 +410,7 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       modes=Parsedmodes,
       ident=Ident,
       host=Hostname,
+      realhost=Hostname,
       ip=Ipaddr,
       realname=Gecos,
       channels=sets:new(),
@@ -427,6 +429,56 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       modes=Parsedmodes,
       ident=Ident,
       hostname=Hostname,
+      ip=Ipaddr,
+      uid=UID,
+      realhostname=Hostname,
+      gecos=Gecos,
+      burst=State#state.burst
+     },
+
+    plugincommand(State, uid, Pluginparams),
+    
+    State;
+    
+irccmd(euid, State, SID, [Nick, Hops, TS,
+			 Usermode, Ident, Hostname,
+			 Ipaddr, UID, Real_hostname, Accountname, Gecos]) ->
+    Authinfo = case Accountname of
+		   <<"0">> -> undefined;
+		   <<"*">> -> undefined;
+		   _Else -> {SID, Accountname}
+	       end,
+    TS_I = list_to_integer(binary_to_list(TS)),
+    Parsedmodes = esmisc:parseumode(Usermode),
+    User = #ircuser{
+      uid=UID,
+      sid=SID,
+      nick=Nick,
+      hop=Hops,
+      ts=TS_I,
+      modes=Parsedmodes,
+      ident=Ident,
+      host=Hostname,
+      ip=Ipaddr,
+      realname=Gecos,
+      channels=sets:new(),
+      realhost=Real_hostname,
+      authenticated=Authinfo,
+      away=undefined
+     },
+
+    ets:insert(State#state.ntuidtable, {Nick, UID}),
+    ets:insert(State#state.usertable, User),
+
+    Pluginparams = #irccmduid{
+      server=SID,
+      nick=Nick,
+      hops=Hops,
+      ts=TS_I,
+      modes=Parsedmodes,
+      ident=Ident,
+      hostname=Hostname,
+      realhostname=Real_hostname,
       ip=Ipaddr,
       uid=UID,
       gecos=Gecos,
@@ -650,7 +702,10 @@ irccmd(whois, State, Inquirer, [_Requestedserver, Inquirednick]) ->
 	user_not_found ->
 	    ts6:sts_whoisnotfound(S, Hostname, Inquirer,
 				  Inquirednick, "Not on this server");
-	User ->
+	{uid, _User} ->
+	    ts6:sts_whoisnotfound(S, Hostname, Inquirer,
+				  Inquirednick, "Not on this server");
+	{nick, User} ->
 	    ts6:sts_whoisuser(S, Hostname, Inquirer,
 			      Inquirednick, User#ircuser.ident,
 			      User#ircuser.host, User#ircuser.realname),
@@ -847,9 +902,9 @@ handle_nick_privmsg(State, Messager, Nickname, Message) ->
     Message_Trimmed = iolist_to_binary(
 			re:replace(
 			  Message, << " *\$" >>, << "" >>, [global])),
-    User = find_plugin_user(State, Nickname),
+    {_Nickoruid, User} = find_plugin_user(State, Nickname),
     Messager_User = resolveuser(State, Messager),
-    Nickname_Atom = esmisc:atomorunknown(Nickname),
+    Nickname_Atom = esmisc:atomorunknown(User#ircuser.nick),
     ?DEBUG("Message to ~s from ~s: ~s", [Nickname_Atom,
 					 Messager_User#ircuser.nick,
 					 Message_Trimmed]),
@@ -1036,7 +1091,9 @@ find_plugin_user(State, Usernick) ->
     find_plugin_user(search, Pluginusers, Usernick).
 
 find_plugin_user(search, [#ircuser{nick=Usernick}=User|_Rest], Usernick) ->
-    User;
+    {nick, User};
+find_plugin_user(search, [#ircuser{uid=Usernick}=User|_Rest], Usernick) ->
+    {uid, User};
 find_plugin_user(search, [_Someuser|Rest], Usernick) ->
     find_plugin_user(search, Rest, Usernick);
 find_plugin_user(search, [], _Usernick) ->
