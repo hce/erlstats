@@ -675,6 +675,19 @@ irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID, Accountname]) ->
     end,
     State;
 
+irccmd(encap, State, SourceSID, [_Targets, <<"SU">>, UID]) ->
+    case ets:lookup(State#state.usertable, UID) of
+	[] ->
+	    ?DEBUG("Error: ~p reports ~p unauthenticated, "
+		   "but ~p is not in our user table! (anymore?)",
+		   [SourceSID, UID, UID]);
+	[User] ->
+	    User_U = User#ircuser{authenticated=undefined},
+	    ?DEBUG("~s has logged ~s out.", [SourceSID, User_U#ircuser.nick]),
+	    ets:insert(State#state.usertable, User_U)
+    end,
+    State;
+
 irccmd(encap, State, _SourceSID, [_Targets, <<"CHANACS">>, Reference, <<"ACCESS">>, Accessflags]) ->
     [{Reference, Return_PID, Nickservuser, Channelname}] = 
 	ets:lookup(State#state.referencetable, Reference),
