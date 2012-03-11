@@ -99,6 +99,8 @@ handle_cast({irccmd, uid, #irccmduid{burst=true}=_Params}, State) ->
     {noreply, State};
 handle_cast({irccmd, uid, #irccmduid{burst=false}=Params}, State) ->
     check_torhiddennodeuser(State, Params),
+    check_webchat(State, Params),
+    check_ernstchan(State, Params),
     Newstate = check_blacklist(State, Params),
     {noreply, Newstate};
 
@@ -378,6 +380,24 @@ check_torhiddennodeuser(State, Params) ->
 	true ->erlstats:irc_chghost((State#state.greaseluser)#ircuser.uid,
 				    Params#irccmduid.uid,
 				    io_lib:format("tor/hiddenservice/~s", [esmisc:uidtodomain(Params#irccmduid.uid)]));
+	false ->
+	    ignore
+    end.
+
+check_webchat(State, Params) ->
+    case Params#irccmduid.hostname =:= << "webchat." >> of
+	true ->erlstats:irc_chghost((State#state.greaseluser)#ircuser.uid,
+				    Params#irccmduid.uid,
+				    io_lib:format("gateway/webchat/ip.~s", [Params#irccmduid.ip]));
+	false ->
+	    ignore
+    end.
+    
+check_ernstchan(State, Params) ->
+    case Params#irccmduid.server =:= << "779" >> of
+	true ->erlstats:irc_chghost((State#state.greaseluser)#ircuser.uid,
+				    Params#irccmduid.uid,
+				    io_lib:format("ernstchan/user/~s", [esmisc:uidtodomain(Params#irccmduid.uid)]));
 	false ->
 	    ignore
     end.
