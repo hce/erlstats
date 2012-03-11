@@ -103,7 +103,7 @@ parsecmode_i(_Operation, Channel, << >>, _Shouldbeempty, _TS) ->
     Channel;
 
 parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall, TS) ->
-    case {lists:member(Modechar, "ntpsmiS"), Operation, Modechar} of
+    case {lists:member(Modechar, "ntspmircgzLPFQC"), Operation, Modechar} of
 	{_, _, $+} ->
 	    parsecmode_i(add, Channel, MRest, Pall, TS);
 	{_, _, $-} ->
