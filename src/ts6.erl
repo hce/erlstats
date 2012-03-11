@@ -13,6 +13,7 @@
 -export([
 	 sts_login/5,
 	 sts_pong/2,
+	 sts_pong/4,
 	 sts_newuser/2,
 	 sts_kill/5,
 	 sts_kline/5,
@@ -46,9 +47,16 @@ sts_login(S, SID, Nodename, Password, Node_Description) ->
 		    >>).
 
 sts_pong(S, Pongparam) ->
-    gen_tcp:send(S, <<
-		      "PONG :", Pongparam/binary, 10
-		    >>).    
+    gen_tcp:send(S, [
+		     "PONG :",
+		     Pongparam,
+		     10
+		    ]).    
+
+sts_pong(S, SID, Destination, Origin) ->
+    gen_tcp:send(S, [":", SID,
+		     " PONG ", Origin,
+		     " :", Destination, 10]).
 
 sts_newuser(S, Ircuser) ->
     Hops_B     = list_to_binary(integer_to_list(Ircuser#ircuser.hop)),

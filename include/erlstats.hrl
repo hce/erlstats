@@ -27,11 +27,14 @@
 		     bans,
 		     banexps,
 		     invexps,
+		     quiets,
 		     chankey,
 		     chanlimit,
+		     jointhrottle,
+		     forward,		     
 		     modes,
 		     users,
-		     topic,
+		     topic,		     
 		     ts}).
 
 -record(ircchanuser, {uid, privs}).

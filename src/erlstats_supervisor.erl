@@ -44,7 +44,7 @@ init([]) ->
 		{'erlstats',
 		 start_link,[
 			     ["127.0.0.1",
-			      6667,
+			      5000,
 			      <<"stats.hackint.org">>,
 			      <<"00F">>,
 			      <<"barkbark!">>,

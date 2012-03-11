@@ -279,6 +279,7 @@ handle_info({tcp, _Socket, Data}, State) ->
     Len = size(Data) - 2,  % Substract the length of \r\n
     << Data_wr:Len/binary, _CRLF/binary >> = Data,
 
+    io:format("~s~n", [Data_wr]),
     Newstate = case parseline(Data_wr) of
 		   [Instigator, Command|Params] ->
 		       Command_atom = case esmisc:atomorunknown(Command) of
@@ -385,6 +386,13 @@ irccmd(ping, State, [], [Pongparam]) ->
     ts6:sts_pong(State#state.socket, Pongparam),
     State;
 
+irccmd(ping, State, Instigator, [Pongparam]) ->
+    ?DEBUG("Sending PONG ~p to ~s", [Pongparam, Instigator]),
+    ts6:sts_pong(State#state.socket,
+		 (State#state.me)#ircserver.sid,
+		 Instigator, Pongparam),
+    State;
+
 irccmd(pong, State, _Someone, _Someparams) ->
     ?DEBUG("~p replied to our PING: ~p", [_Someone, _Someparams]),
     if
@@ -414,7 +422,8 @@ irccmd(uid, State, SID, [Nick, Hops, TS,
       realname=Gecos,
       channels=sets:new(),
       authenticated=false,
-      away=undefined
+      away=undefined,
+      serverdata=dict:new()
      },
 
     ets:insert(State#state.ntuidtable, {Nick, UID}),
@@ -463,7 +472,8 @@ irccmd(euid, State, SID, [Nick, Hops, TS,
       channels=sets:new(),
       realhost=Real_hostname,
       authenticated=Authinfo,
-      away=undefined
+      away=undefined,
+      serverdata=dict:new()
      },
 
     ets:insert(State#state.ntuidtable, {Nick, UID}),
@@ -805,6 +815,15 @@ irccmd(error, State, Instigator, Params) ->
     ?DEBUG("Got ERROR.~n    Instigator: ~p~n    Params: ~p~n    State: ~p",
 	   [Instigator, Params, State]),
     exit(irc_error),
+    State;
+
+irccmd(chghost, State, Instigator, [UID, Newhost]) ->
+    [User] = ets:lookup(State#state.usertable, UID),
+    User_u = User#ircuser{host=Newhost},
+    Serverdata = User#ircuser.serverdata,
+    Serverdata_u = dict:store(vhostsetter, Instigator, Serverdata),
+    User_u2 = User_u#ircuser{serverdata=Serverdata_u},
+    ets:insert(State#state.usertable, User_u2),
     State;
 
 irccmd(Command, State, Instigator, Params) ->

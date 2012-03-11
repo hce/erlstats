@@ -132,6 +132,20 @@ parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall, TS) ->
 	    [Param|PRest] = Pall,
 	    CU = Channel#ircchannel{chanlimit=list_to_integer(binary_to_list(Param))},
 	    parsecmode_i(Operation, CU, MRest, PRest, TS);
+	{false, remove, $j} ->
+	    CU = Channel#ircchannel{jointhrottle=undefined},
+	    parsecmode_i(Operation, CU, MRest, Pall, TS);
+	{false, add, $j} ->
+	    [Param|PRest] = Pall,
+	    CU = Channel#ircchannel{jointhrottle=Param},
+	    parsecmode_i(Operation, CU, MRest, PRest, TS);
+	{false, remove, $f} ->
+	    CU = Channel#ircchannel{forward=undefined},
+	    parsecmode_i(Operation, CU, MRest, Pall, TS);
+	{false, add, $f} ->
+	    [Param|PRest] = Pall,
+	    CU = Channel#ircchannel{forward=Param},
+	    parsecmode_i(Operation, CU, MRest, PRest, TS);
 	{false, Operation, $v} ->
 	    [Param|PRest] = Pall,
 	    Users_U = updateuser(Param, Operation, voice, Channel#ircchannel.users),
@@ -161,6 +175,21 @@ parsecmode_i(Operation, Channel, << Modechar:8, MRest/binary >>, Pall, TS) ->
 	    List_U = [Elem || #ircban{banmask=BM}=Elem <- List,
 			      BM =/= Param],
 	    CU = Channel#ircchannel{bans=List_U},
+	    parsecmode_i(Operation, CU, MRest, PRest, TS);
+	{false, add, $q} ->
+	    [Param|PRest] = Pall,
+	    List = Channel#ircchannel.quiets,
+	    List_U = [#ircban{time=curtime(),
+			      user=unknown,
+			      banmask=Param}|List],
+	    CU = Channel#ircchannel{quiets=List_U},
+	    parsecmode_i(Operation, CU, MRest, PRest, TS);
+	{false, remove, $q} ->
+	    [Param|PRest] = Pall,
+	    List = Channel#ircchannel.quiets,
+	    List_U = [Elem || #ircban{banmask=BM}=Elem <- List,
+			      BM =/= Param],
+	    CU = Channel#ircchannel{quiets=List_U},
 	    parsecmode_i(Operation, CU, MRest, PRest, TS);
 	{false, add, $e} ->
 	    [Param|PRest] = Pall,
