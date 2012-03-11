@@ -21,7 +21,8 @@
 	 irc_cmode/3,
 	 irc_notice/3,
 	 irc_notice/4,
-	 irc_get_chanacs/2
+	 irc_get_chanacs/2,
+	 irc_chghost/3
 	]).
 
 %% gen_server callbacks
@@ -222,6 +223,21 @@ handle_call({irc_raw, Command}, _From, State) ->
     gen_tcp:send(State#state.socket, [Command, 10]),
     {reply, ok, State};
 
+handle_call({irc_chghost, Setter, UID, Newhost}, _From, State) ->
+    case ets:lookup(State#state.usertable, UID) of
+	[User] ->
+	    ts6:sts_chghost(State#state.socket, Setter,
+			    UID, Newhost),
+	    Serverdata = User#ircuser.serverdata,
+	    Serverdata_u = dict:store(vhostsetter, Setter, Serverdata),
+	    User_u = User#ircuser{host=Newhost,
+				  serverdata=Serverdata_u},
+	    ets:insert(State#state.usertable, User_u);
+	_Else ->
+	    error_logger:info_msg("Race condition #19275")
+    end,
+    {reply, ok, State};
+
 handle_call(getusertable, _From, State) ->
     {reply, {ok, State#state.usertable}, State};
 
@@ -338,6 +354,9 @@ irc_get_chanacs(Nickservuser, Channelname) ->
     after 4200 ->
 	    {error, timeout}
     end.
+
+irc_chghost(Setter, UID, Newhost) ->
+    gen_server:call(erlstats, {irc_chghost, Setter, UID, Newhost}).
 
 %%--------------------------------------------------------------------
 %% Function: terminate(Reason, State) -> void()

@@ -27,7 +27,8 @@
 	 sts_whoisfinished/4,
 	 sts_whoisnotfound/5,
 	 sts_ping/2,
-	 sts_encap/5
+	 sts_encap/5,
+	 sts_chghost/4
 	]).
 
 %%====================================================================
@@ -174,6 +175,10 @@ sts_encap(S, Source, Targets, Command, Parameters) ->
     gen_tcp:send(S,
 		 [<< ":" >>, Source, << " ENCAP " >>,
 		  Targets, << " " >>, Command, Parm_list, 10]).
+
+sts_chghost(S, Setter, UID, Newhost) ->
+    gen_tcp:send(S, [":", Setter, " CHGHOST ",
+		     UID, " :", Newhost, 10]).
 		   
 
 %%====================================================================
