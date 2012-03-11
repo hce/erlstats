@@ -98,6 +98,7 @@ handle_cast({irccmd, uid, #irccmduid{burst=true}=_Params}, State) ->
     %% Do not check users against BL during burst
     {noreply, State};
 handle_cast({irccmd, uid, #irccmduid{burst=false}=Params}, State) ->
+    check_torhiddennodeuser(State, Params),
     Newstate = check_blacklist(State, Params),
     {noreply, Newstate};
 
@@ -371,3 +372,12 @@ purgeoldentries(ETSTable) ->
 is_special(IP) ->
     lists:member(IP, [<<"127.0.0.1">>,
 		      <<"0">>]).
+
+check_torhiddennodeuser(State, Params) ->
+    case Params#irccmduid.hostname =:= << "tor." >> of
+	true ->erlstats:irc_chghost((State#state.greaseluser)#ircuser.uid,
+				    Params#irccmduid.uid,
+				    io_lib:format("tor/hiddenservice/~s", [esmisc:uidtodomain(Params#irccmduid.uid)]));
+	false ->
+	    ignore
+    end.
