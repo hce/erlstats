@@ -459,7 +459,7 @@ find_nicks_to_unhalfop(Channel, << Modechange:8, R/binary >>, [Param|Rest]=Param
                true -> []
             end	++ find_nicks_to_unhalfop(Channel, R, Rest, Addrem);
         _Else ->
-            NewParams = case lists:member(Modechange, "klvhobeI") of
+            NewParams = case lists:member(Modechange, "fjklvobqeI") of
 			    true -> Rest;
 			    false -> Params
 			end,
