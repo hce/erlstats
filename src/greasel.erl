@@ -340,6 +340,9 @@ check_blacklist(State, Params) ->
 	    erlstats:irc_notice((State#state.greaseluser)#ircuser.uid,
 				Params#irccmduid.uid,
 				[<< "You are welcome to connect via tor, but it is recommended you use our Tor hidden service. Please read \^bhttp://blog.hackint.eu/blog/display?id=19\^b" >>]),
+	    erlstats:irc_chghost((State#state.greaseluser)#ircuser.uid,
+				 Params#irccmduid.uid,
+				 io_lib:format("tor/direct/~s", [esmisc:uidtodomain(Params#irccmduid.uid)])),
 	    esmisc:log("New user ~s!~s@~s *is* connecting via tor; "
 		       "sending them a warning message to use our "
 		       "Tor hidden service.", [Params#irccmduid.nick,

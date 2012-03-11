@@ -24,7 +24,8 @@
 	 removeuser/2,
 	 removeusermodes/1,
 	 addchanusers/2,
-	 parseduration/1
+	 parseduration/1,
+	 uidtodomain/1
 	]).
 
 %% Spawn functions
@@ -295,10 +296,21 @@ parseduration(Duration) when is_list(Duration) ->
 	{_Number, _Rest} ->
 	    {error, "Only integers are allowed."}
     end.
+
+% Take an UID and convert it into something that can be used
+% as part of a vhost/cloak
+uidtodomain(UID) ->
+    uidtodomain(int, binary_to_list(iolist_to_binary(UID))).
 		 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+% Take an UID and convert it into something that can be used
+% as part of a vhost/cloak
+uidtodomain(int, UID) ->
+    UID1 = string:to_lower(UID),
+    lists:sublist(UID1, 4, 6) ++ lists:sublist(UID1, 1, 3).
+
 openlog() ->
     %%Logpath = code:priv_dir(erlstats),
     Logpath = "priv",
